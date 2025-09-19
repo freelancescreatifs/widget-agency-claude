@@ -9,52 +9,49 @@ const ErrorDisplay = ({ error, onClose, onRetry }) => {
   if (!error) return null;
 
   const getErrorInfo = (error) => {
-    // Erreurs réseau
-    if (error.message && error.message.includes('Failed to fetch')) {
+    if (error.message && error.message.includes('API non disponible')) {
       return {
-        title: 'Erreur de connexion',
-        message: 'Impossible de contacter le serveur',
+        title: 'API non disponible',
+        message: 'Le serveur ne répond pas',
         type: 'network',
         icon: <WifiOff className="w-5 h-5" />,
         solutions: [
-          'Vérifiez votre connexion internet',
-          'Le serveur Vercel peut être en cours de redémarrage',
-          'Réessayez dans quelques secondes'
+          'Attendez que Vercel redémarre l\'API (1-2 minutes)',
+          'Vérifiez que votre projet est bien déployé',
+          'Testez l\'URL API directement dans votre navigateur'
         ]
       };
     }
 
-    // Erreurs API
-    if (error.code) {
-      const errorMap = {
-        'MISSING_API_KEY': {
-          title: 'Clé API manquante',
-          message: 'Vous devez entrer votre clé API Notion',
-          type: 'config'
-        },
-        'INVALID_API_KEY_FORMAT': {
-          title: 'Format de clé invalide',
-          message: 'La clé doit commencer par "ntn_"',
-          type: 'config'
-        },
-        'NOTION_API_ERROR': {
-          title: 'Erreur Notion',
-          message: error.message || 'Problème avec l\'API Notion',
-          type: 'notion'
-        }
-      };
-
-      return errorMap[error.code] || {
-        title: 'Erreur inconnue',
-        message: error.message || 'Une erreur inattendue s\'est produite',
-        type: 'unknown'
+    if (error.code === 'MISSING_API_KEY') {
+      return {
+        title: 'Clé API manquante',
+        message: 'Vous devez configurer votre clé API Notion',
+        type: 'config',
+        solutions: [
+          'Allez dans Paramètres ⚙️',
+          'Entrez votre clé API qui commence par "ntn_"',
+          'Cliquez "Connecter à Notion"'
+        ]
       };
     }
 
-    // Erreur générique
+    if (error.code === 'INVALID_API_KEY') {
+      return {
+        title: 'Format de clé invalide',
+        message: 'La clé doit commencer par "ntn_"',
+        type: 'config',
+        solutions: [
+          'Vérifiez que votre clé commence par "ntn_"',
+          'Créez une nouvelle intégration sur notion.so/my-integrations',
+          'Copiez la clé complète'
+        ]
+      };
+    }
+
     return {
       title: 'Erreur',
-      message: error.message || 'Une erreur s\'est produite',
+      message: error.message || error.error || 'Une erreur s\'est produite',
       type: 'generic',
       icon: <AlertTriangle className="w-5 h-5" />
     };
@@ -112,7 +109,7 @@ const ErrorDisplay = ({ error, onClose, onRetry }) => {
   );
 };
 
-// Composant pour les médias avec auto-slide
+// Composant pour les médias
 const MediaDisplay = ({ urls, type, index }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoSliding, setIsAutoSliding] = useState(type === 'Carrousel');
@@ -285,13 +282,16 @@ const InstagramNotionWidget = () => {
     }
   }, []);
 
-  // Test de l'API
+  // Test de l'API simplifié
   const testAPI = async () => {
     try {
-      const response = await fetch(`${API_BASE}/notion`);
+      console.log('🧪 Testing API...');
+      const response = await fetch(`${API_BASE}/notion`, {
+        method: 'GET'
+      });
       const data = await response.json();
-      console.log('🧪 API Test:', data);
-      return data.status === 'API Active';
+      console.log('🧪 API Response:', data);
+      return data.status === 'OK';
     } catch (err) {
       console.error('❌ API Test Failed:', err);
       return false;
@@ -314,10 +314,15 @@ const InstagramNotionWidget = () => {
 
     try {
       // Test de l'API d'abord
+      console.log('🧪 Testing API availability...');
       const apiActive = await testAPI();
       if (!apiActive) {
-        throw new Error('API non disponible');
+        setError({ message: 'API non disponible' });
+        setConnectionStatus('❌ API non disponible');
+        return;
       }
+
+      console.log('📡 API active, connecting to Notion...');
 
       const response = await fetch(`${API_BASE}/notion`, {
         method: 'POST',
@@ -368,10 +373,10 @@ const InstagramNotionWidget = () => {
     } catch (error) {
       console.error('❌ Connection Error:', error);
       setError({
-        message: error.message || 'Erreur de connexion',
+        message: 'API non disponible',
         type: 'network'
       });
-      setConnectionStatus('❌ Erreur de réseau');
+      setConnectionStatus('❌ API non disponible');
     } finally {
       setIsLoading(false);
     }
@@ -385,18 +390,6 @@ const InstagramNotionWidget = () => {
 
   return (
     <div className="w-full max-w-md mx-auto bg-white relative">
-      {/* Filigrane */}
-      <div className="absolute top-2 left-2 z-20">
-        <a 
-          href="https://www.instagram.com/freelance.creatif/" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded hover:bg-opacity-70 transition-opacity"
-        >
-          Créé par @Freelancecreatif
-        </a>
-      </div>
-
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-3">
@@ -607,7 +600,7 @@ const InstagramNotionWidget = () => {
           <div className="bg-blue-50 p-3 rounded-lg">
             <h3 className="font-medium text-blue-800 mb-2">Configuration Notion</h3>
             <p className="text-sm text-blue-700 mb-3">
-              Nouvelle clé API format : <code className="bg-blue-100 px-1 rounded">ntn_...</code> 
+              Clé API format : <code className="bg-blue-100 px-1 rounded">ntn_...</code> 
               <br />
               <a href="https://notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                 Créer une intégration →
@@ -657,7 +650,7 @@ const InstagramNotionWidget = () => {
       <div className="px-4 py-2 bg-gray-50 text-sm text-gray-600 border-b flex items-center justify-between">
         <span>{connectionStatus}</span>
         {connectionStatus.includes('❌') && (
-          <Wifi className="w-4 h-4 text-red-500" />
+          <WifiOff className="w-4 h-4 text-red-500" />
         )}
         {connectionStatus.includes('✅') && (
           <Wifi className="w-4 h-4 text-green-500" />
@@ -716,6 +709,18 @@ const InstagramNotionWidget = () => {
           </p>
         </div>
       )}
+
+      {/* Filigrane en bas - NOUVEAU POSITIONNEMENT */}
+      <div className="w-full flex justify-center py-2 bg-gray-50 border-t">
+        <a 
+          href="https://www.instagram.com/freelance.creatif/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          Créé par @Freelancecreatif
+        </a>
+      </div>
 
       {/* Modal d'erreur */}
       <ErrorDisplay 
