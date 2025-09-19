@@ -2,7 +2,6 @@
   "name": "instagram-widget",
   "version": "1.0.0",
   "description": "Widget Instagram pour Notion",
-  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "react-scripts start",
@@ -27,8 +26,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
