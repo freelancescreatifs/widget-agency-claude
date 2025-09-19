@@ -315,29 +315,40 @@ const InstagramNotionWidget = () => {
       });
 
       const data = await response.json();
+      console.log('📊 Données reçues de Notion:', data);
 
       if (data.success) {
         setPosts(data.posts);
+        console.log('📋 Posts chargés:', data.posts.length);
         
-        // Extraire automatiquement les comptes
+        // Debug des comptes
+        console.log('🏷️ Comptes détectés dans les posts:', data.posts.map(p => p.account));
+        console.log('🏷️ Comptes uniques de l\'API:', data.meta.accounts);
+        
+        // Extraire et fusionner les comptes
         if (data.meta.accounts && data.meta.accounts.length > 0) {
-          const allAccounts = ['All', ...data.meta.accounts];
+          const existingManualAccounts = accounts.filter(acc => !data.meta.accounts.includes(acc) && acc !== 'All');
+          const allAccounts = ['All', ...data.meta.accounts, ...existingManualAccounts];
           const uniqueAccounts = [...new Set(allAccounts)];
+          
+          console.log('🏷️ Comptes finaux:', uniqueAccounts);
           
           if (JSON.stringify(uniqueAccounts) !== JSON.stringify(accounts)) {
             setAccounts(uniqueAccounts);
             localStorage.setItem('instagramAccounts', JSON.stringify(uniqueAccounts));
+            console.log('💾 Comptes sauvegardés:', uniqueAccounts);
           }
         }
         
         setConnectionStatus(`✅ Connecté à Notion • ${data.posts.length} post(s)`);
         setIsConfigOpen(false);
       } else {
+        console.error('❌ Erreur API:', data.error);
         setConnectionStatus(`❌ Erreur: ${data.error}`);
       }
     } catch (error) {
+      console.error('❌ Erreur fetch:', error);
       setConnectionStatus('❌ Erreur de connexion Notion');
-      console.error('Erreur fetch:', error);
     }
   };
 
@@ -422,13 +433,27 @@ const InstagramNotionWidget = () => {
     if (activeAccount === 'All') {
       return true;
     }
-    return post.account === activeAccount;
+    const matches = post.account === activeAccount;
+    if (!matches) {
+      console.log(`📋 Post "${post.title}" filtré: account="${post.account}" !== activeAccount="${activeAccount}"`);
+    }
+    return matches;
   });
+
+  // Debug du filtrage
+  console.log(`🔍 Filtrage: activeAccount="${activeAccount}", posts totaux: ${posts.length}, posts filtrés: ${filteredPosts.length}`);
+  console.log('📋 Posts par compte:', posts.reduce((acc, post) => {
+    const account = post.account || 'Sans compte';
+    acc[account] = (acc[account] || 0) + 1;
+    return acc;
+  }, {}));
 
   // Mettre à jour un post dans Notion
   const updatePostInNotion = async (postId, newDate) => {
     try {
-      await fetch(`${API_BASE}/notion`, {
+      console.log(`🔄 Mise à jour post ${postId} avec date ${newDate}`);
+      
+      const response = await fetch(`${API_BASE}/notion`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -441,8 +466,20 @@ const InstagramNotionWidget = () => {
           newDate: newDate,
         }),
       });
+
+      const result = await response.json();
+      console.log('✅ Résultat mise à jour:', result);
+      
+      if (result.success) {
+        console.log(`✅ Post ${postId} mis à jour avec succès`);
+      } else {
+        console.error('❌ Erreur mise à jour:', result.error);
+      }
+      
+      return result.success;
     } catch (error) {
-      console.error('Erreur mise à jour Notion:', error);
+      console.error('❌ Erreur réseau mise à jour:', error);
+      return false;
     }
   };
 
@@ -476,36 +513,69 @@ const InstagramNotionWidget = () => {
     setDragOverIndex(null);
 
     if (draggedIndex === null || draggedIndex === dropIndex) {
+      console.log('⚠️ Drag annulé: même position ou pas de drag');
       return;
     }
 
-    // Réorganiser les posts
-    const newPosts = [...filteredPosts];
-    const [draggedPost] = newPosts.splice(draggedIndex, 1);
-    newPosts.splice(dropIndex, 0, draggedPost);
+    console.log(`🔄 Drag & Drop: ${draggedIndex} → ${dropIndex}`);
+    console.log('📋 Posts avant réorganisation:', filteredPosts.map((p, i) => `${i}: ${p.title} (${p.date})`));
 
-    // Calculer nouvelles dates
-    const today = new Date();
-    const postsWithNewDates = newPosts.map((post, index) => {
-      const newDate = new Date(today);
-      newDate.setDate(today.getDate() + index);
-      const dateString = newDate.toISOString().split('T')[0];
+    try {
+      // Créer une copie des posts filtrés pour réorganiser
+      const newFilteredPosts = [...filteredPosts];
+      const [draggedPost] = newFilteredPosts.splice(draggedIndex, 1);
+      newFilteredPosts.splice(dropIndex, 0, draggedPost);
+
+      console.log('📋 Posts après réorganisation locale:', newFilteredPosts.map((p, i) => `${i}: ${p.title}`));
+
+      // Calculer les nouvelles dates (posts plus récents en premier)
+      const today = new Date();
+      const postsWithNewDates = newFilteredPosts.map((post, index) => {
+        const newDate = new Date(today);
+        newDate.setDate(today.getDate() - index); // Soustraction pour ordre décroissant
+        const dateString = newDate.toISOString().split('T')[0];
+        
+        return { ...post, date: dateString };
+      });
+
+      console.log('📅 Nouvelles dates calculées:', postsWithNewDates.map((p, i) => `${i}: ${p.title} → ${p.date}`));
+
+      // Mettre à jour l'état immédiatement pour feedback visuel
+      const updatedAllPosts = posts.map(post => {
+        const updatedPost = postsWithNewDates.find(p => p.id === post.id);
+        return updatedPost || post;
+      });
+
+      setPosts(updatedAllPosts);
+      console.log('✅ État local mis à jour');
+
+      // Mettre à jour chaque post dans Notion en parallèle
+      const updatePromises = postsWithNewDates.map(async (post, index) => {
+        if (post.date !== filteredPosts.find(p => p.id === post.id)?.date) {
+          console.log(`🔄 Mise à jour Notion pour ${post.title}: ${post.date}`);
+          const success = await updatePostInNotion(post.id, post.date);
+          return { postId: post.id, success, title: post.title };
+        }
+        return { postId: post.id, success: true, title: post.title, skipped: true };
+      });
+
+      const results = await Promise.all(updatePromises);
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success && !r.skipped).length;
       
-      // Mettre à jour dans Notion
-      updatePostInNotion(post.id, dateString);
+      console.log(`📊 Résultats mise à jour Notion: ${successful} succès, ${failed} échecs`);
       
-      return { ...post, date: dateString };
-    });
+      if (failed > 0) {
+        console.warn('⚠️ Certaines mises à jour ont échoué:', results.filter(r => !r.success));
+      }
 
-    // Mettre à jour l'état
-    const updatedAllPosts = posts.map(post => {
-      const updatedPost = postsWithNewDates.find(p => p.id === post.id);
-      return updatedPost || post;
-    });
+    } catch (error) {
+      console.error('❌ Erreur lors de la réorganisation:', error);
+      // En cas d'erreur, recharger les posts depuis Notion
+      fetchPosts();
+    }
 
-    setPosts(updatedAllPosts);
-    
-    console.log('Posts réorganisés:', postsWithNewDates.map((p, i) => `${i + 1}. ${p.title} - ${p.date}`));
+    setDraggedIndex(null);
   };
 
   // Créer la grille 3x4
@@ -617,25 +687,31 @@ const InstagramNotionWidget = () => {
 
       {/* Onglets comptes */}
       <div className="flex items-center space-x-2 px-4 mb-4 overflow-x-auto">
-        {accounts.map((account) => (
-          <button
-            key={account}
-            onClick={() => setActiveAccount(account)}
-            className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
-              activeAccount === account
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {account}
-            <span className="ml-1 text-xs opacity-75">
-              ({account === 'All' 
-                ? posts.length 
-                : posts.filter(p => p.account === account).length
-              })
-            </span>
-          </button>
-        ))}
+        {accounts.map((account) => {
+          const accountPostCount = account === 'All' 
+            ? posts.length 
+            : posts.filter(p => p.account === account).length;
+            
+          return (
+            <button
+              key={account}
+              onClick={() => {
+                console.log(`🔄 Changement de compte: ${activeAccount} → ${account}`);
+                setActiveAccount(account);
+              }}
+              className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
+                activeAccount === account
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {account}
+              <span className="ml-1 text-xs opacity-75">
+                ({accountPostCount})
+              </span>
+            </button>
+          );
+        })}
         
         <button
           onClick={() => setIsAccountManager(true)}
@@ -645,6 +721,15 @@ const InstagramNotionWidget = () => {
           <Plus size={16} />
         </button>
       </div>
+
+      {/* Debug des comptes (temporaire) */}
+      {posts.length > 0 && (
+        <div className="px-4 mb-2">
+          <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+            Debug: Comptes={accounts.join(', ')} | Actif={activeAccount} | Posts={posts.length} | Filtrés={filteredPosts.length}
+          </div>
+        </div>
+      )}
 
       {/* Grille d'images 3x4 avec drag & drop */}
       <div className="grid grid-cols-3 gap-1 p-4">
