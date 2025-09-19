@@ -165,52 +165,28 @@ const ErrorDisplay = ({ error, onClose, onRetry }) => {
   );
 };
 
-// Composant pour les médias avec drag & drop
-const MediaDisplay = ({ urls, type, index, onDragStart, onDrop, onDragOver, isDragOver, onClick }) => {
+// Composant pour les médias SANS auto-slide
+const MediaDisplay = ({ urls, type, index, onClick }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isAutoSliding, setIsAutoSliding] = useState(type === 'Carrousel');
-  const [lastManualAction, setLastManualAction] = useState(0);
-
-  useEffect(() => {
-    if (type === 'Carrousel' && isAutoSliding && urls.length > 1) {
-      const now = Date.now();
-      if (now - lastManualAction < 5000) return;
-
-      const interval = setInterval(() => {
-        setCurrentIndex(prev => (prev + 1) % urls.length);
-      }, 3000);
-
-      return () => clearInterval(interval);
-    }
-  }, [type, isAutoSliding, urls.length, lastManualAction]);
 
   const handlePrevious = (e) => {
     e.stopPropagation();
     setCurrentIndex(prev => prev === 0 ? urls.length - 1 : prev - 1);
-    setLastManualAction(Date.now());
   };
 
   const handleNext = (e) => {
     e.stopPropagation();
     setCurrentIndex(prev => (prev + 1) % urls.length);
-    setLastManualAction(Date.now());
   };
 
   const handleDotClick = (e, dotIndex) => {
     e.stopPropagation();
     setCurrentIndex(dotIndex);
-    setLastManualAction(Date.now());
   };
 
   if (!urls || urls.length === 0) {
     return (
-      <div 
-        className={`w-full h-full bg-gray-100 flex items-center justify-center border-2 border-dashed ${
-          isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-        }`}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-      >
+      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
         <span className="text-gray-400 text-sm">Post {index + 1}</span>
       </div>
     );
@@ -220,15 +196,7 @@ const MediaDisplay = ({ urls, type, index, onDragStart, onDrop, onDragOver, isDr
 
   return (
     <div 
-      className={`relative w-full h-full overflow-hidden bg-gray-100 cursor-move ${
-        isDragOver ? 'ring-2 ring-blue-500' : ''
-      }`}
-      draggable
-      onDragStart={onDragStart}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-      onMouseEnter={() => setIsAutoSliding(false)}
-      onMouseLeave={() => setIsAutoSliding(true)}
+      className="relative w-full h-full overflow-hidden bg-gray-100 cursor-pointer"
       onClick={onClick}
     >
       {type === 'Vidéo' ? (
@@ -246,6 +214,9 @@ const MediaDisplay = ({ urls, type, index, onDragStart, onDrop, onDragOver, isDr
           alt=""
           className="w-full h-full object-cover"
           style={{ aspectRatio: '1080/1350' }}
+          onError={(e) => {
+            e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTA4MCIgaGVpZ2h0PSIxMzUwIiB2aWV3Qm94PSIwIDAgMTA4MCAxMzUwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMTA4MCIgaGVpZ2h0PSIxMzUwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik01NDAgNjc1QzU2Ni01MjIgNjIyIDQ2NiA2NzUgNDY2QzcyOCA0NjYgNzg0IDUyMiA3ODQgNTc1Qzc4NCA2MjggNzI4IDY4NCA2NzUgNjg0QzYyMiA2ODQgNTY2IDYyOCA1NjYgNTc1WiIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
+          }}
         />
       )}
 
@@ -269,7 +240,7 @@ const MediaDisplay = ({ urls, type, index, onDragStart, onDrop, onDragOver, isDr
         </div>
       )}
 
-      {/* Navigation carrousel */}
+      {/* Navigation carrousel MANUELLE SEULEMENT */}
       {type === 'Carrousel' && urls.length > 1 && (
         <>
           <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
@@ -304,13 +275,18 @@ const MediaDisplay = ({ urls, type, index, onDragStart, onDrop, onDragOver, isDr
         </>
       )}
 
-      {/* Caption hover - PLUS PETIT */}
-      <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-end p-2">
-        <div className="text-white text-xs truncate">
-          {urls.length > 1 && <span className="mr-2">📷 {urls.length}</span>}
-          <span className="truncate">{currentUrl}</span>
+      {/* Caption hover - 1/3 DE LA PAGE SEULEMENT */}
+      {onClick && (
+        <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-60 transition-all duration-200 flex items-end opacity-0 hover:opacity-100">
+          <div className="w-full h-1/3 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center p-4">
+            <div className="text-white text-center text-xs">
+              <div className="font-medium mb-1">Cliquer pour voir en détail</div>
+              {type === 'Carrousel' && <div className="text-gray-300">{urls.length} photos</div>}
+              {type === 'Vidéo' && <div className="text-gray-300">📹 Vidéo</div>}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -325,8 +301,6 @@ const InstagramNotionWidget = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
-  const [draggedIndex, setDraggedIndex] = useState(null);
-  const [dragOverIndex, setDragOverIndex] = useState(null);
   const [notionConfig, setNotionConfig] = useState({
     apiKey: '',
     databaseId: ''
@@ -415,13 +389,32 @@ const InstagramNotionWidget = () => {
       const validPosts = Array.isArray(data.posts) ? data.posts : [];
       setPosts(validPosts);
       
-      // Extraire les comptes uniques
+      // Extraire les comptes uniques depuis la colonne "Compte Instagram"
       const uniqueAccounts = [...new Set(validPosts.map(post => post.account || 'Principal'))];
       if (uniqueAccounts.length > 0) {
         setAccounts(uniqueAccounts);
         if (!uniqueAccounts.includes(activeAccount)) {
           setActiveAccount(uniqueAccounts[0]);
         }
+        
+        // Créer des profils par défaut pour les nouveaux comptes
+        const newProfiles = { ...profiles };
+        uniqueAccounts.forEach(account => {
+          if (!newProfiles[account]) {
+            newProfiles[account] = {
+              username: account.toLowerCase().replace(/\s+/g, '_'),
+              fullName: account,
+              bio: `🚀 Compte ${account}`,
+              profilePhoto: '',
+              stats: {
+                posts: 'auto',
+                followers: '1,234',
+                following: '567'
+              }
+            };
+          }
+        });
+        setProfiles(newProfiles);
       }
       
       const total = data.meta?.total || 0;
@@ -456,44 +449,6 @@ const InstagramNotionWidget = () => {
 
   // Profil du compte actuel
   const currentProfile = profiles[activeAccount] || profiles['Principal'];
-
-  // Gestion du drag & drop
-  const handleDragStart = (e, index) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e, index) => {
-    e.preventDefault();
-    setDragOverIndex(index);
-  };
-
-  const handleDrop = async (e, dropIndex) => {
-    e.preventDefault();
-    setDragOverIndex(null);
-    
-    if (draggedIndex === null || draggedIndex === dropIndex) return;
-
-    // Réorganiser localement
-    const newPosts = [...filteredPosts];
-    const draggedPost = newPosts[draggedIndex];
-    newPosts.splice(draggedIndex, 1);
-    newPosts.splice(dropIndex, 0, draggedPost);
-
-    // Mettre à jour les dates basées sur la position
-    const sortedByDate = [...newPosts].sort((a, b) => new Date(b.date) - new Date(a.date));
-    const newDate = sortedByDate[dropIndex]?.date || new Date().toISOString().split('T')[0];
-    
-    // Mettre à jour le post déplacé
-    const updatedPosts = posts.map(post => 
-      post.id === draggedPost.id ? { ...post, date: newDate } : post
-    );
-    
-    setPosts(updatedPosts);
-    setDraggedIndex(null);
-
-    // TODO: Synchroniser avec Notion API si nécessaire
-  };
 
   // Gestion de la modal
   const openModal = (post) => {
@@ -839,16 +794,12 @@ const InstagramNotionWidget = () => {
               return (
                 <div
                   key={`post-${index}`}
-                  className="aspect-[1080/1350] bg-gray-100 relative cursor-pointer hover:opacity-90 transition-opacity"
+                  className="aspect-[1080/1350] bg-gray-100 relative"
                 >
                   <MediaDisplay
                     urls={post.urls}
                     type={post.type}
                     index={index}
-                    onDragStart={(e) => handleDragStart(e, index)}
-                    onDrop={(e) => handleDrop(e, index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    isDragOver={dragOverIndex === index}
                     onClick={() => openModal(post)}
                   />
                 </div>
@@ -858,11 +809,7 @@ const InstagramNotionWidget = () => {
             return (
               <div
                 key={`empty-${index}`}
-                className={`aspect-[1080/1350] bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center ${
-                  dragOverIndex === index ? 'border-blue-500 bg-blue-50' : ''
-                }`}
-                onDrop={(e) => handleDrop(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
+                className="aspect-[1080/1350] bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center"
               >
                 <span className="text-gray-400 text-xs">Post {index + 1}</span>
               </div>
@@ -882,7 +829,7 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Filigrane en bas */}
+      {/* Filigrane en bas - DESIGN PRÉCÉDENT */}
       <div className="w-full flex justify-center py-2 bg-gray-50 border-t">
         <a 
           href="https://www.instagram.com/freelance.creatif/" 
