@@ -315,15 +315,9 @@ const InstagramNotionWidget = () => {
       });
 
       const data = await response.json();
-      console.log('📊 Données reçues de Notion:', data);
 
       if (data.success) {
         setPosts(data.posts);
-        console.log('📋 Posts chargés:', data.posts.length);
-        
-        // Debug des comptes
-        console.log('🏷️ Comptes détectés dans les posts:', data.posts.map(p => p.account));
-        console.log('🏷️ Comptes uniques de l\'API:', data.meta.accounts);
         
         // Extraire et fusionner les comptes
         if (data.meta.accounts && data.meta.accounts.length > 0) {
@@ -331,24 +325,20 @@ const InstagramNotionWidget = () => {
           const allAccounts = ['All', ...data.meta.accounts, ...existingManualAccounts];
           const uniqueAccounts = [...new Set(allAccounts)];
           
-          console.log('🏷️ Comptes finaux:', uniqueAccounts);
-          
           if (JSON.stringify(uniqueAccounts) !== JSON.stringify(accounts)) {
             setAccounts(uniqueAccounts);
             localStorage.setItem('instagramAccounts', JSON.stringify(uniqueAccounts));
-            console.log('💾 Comptes sauvegardés:', uniqueAccounts);
           }
         }
         
         setConnectionStatus(`✅ Connecté à Notion • ${data.posts.length} post(s)`);
         setIsConfigOpen(false);
       } else {
-        console.error('❌ Erreur API:', data.error);
         setConnectionStatus(`❌ Erreur: ${data.error}`);
       }
     } catch (error) {
-      console.error('❌ Erreur fetch:', error);
       setConnectionStatus('❌ Erreur de connexion Notion');
+      console.error('❌ Erreur fetch:', error);
     }
   };
 
@@ -367,7 +357,23 @@ const InstagramNotionWidget = () => {
 
   // Obtenir le profil du compte actif
   const getProfile = (account) => {
-    return profiles[account] || profiles['All'];
+    if (profiles[account]) {
+      return profiles[account];
+    }
+    // Fallback vers le premier profil disponible
+    const firstProfile = profiles['All'] || Object.values(profiles)[0];
+    if (firstProfile) {
+      return firstProfile;
+    }
+    // Profil par défaut si rien n'existe
+    return {
+      username: 'mon_compte',
+      fullName: 'Mon Compte',
+      bio: '🚀 Créateur de contenu\n📸 Planning Instagram\n📍 Paris, France',
+      profilePhoto: '',
+      followers: '1,234',
+      following: '567'
+    };
   };
 
   // Sauvegarder profil
@@ -411,7 +417,7 @@ const InstagramNotionWidget = () => {
 
   // Supprimer un compte
   const removeAccount = (accountToRemove) => {
-    if (accountToRemove === 'All' || accounts.length <= 1) return;
+    if (accounts.length <= 1) return;
     
     const newAccounts = accounts.filter(acc => acc !== accountToRemove);
     setAccounts(newAccounts);
@@ -433,26 +439,12 @@ const InstagramNotionWidget = () => {
     if (activeAccount === 'All') {
       return true;
     }
-    const matches = post.account === activeAccount;
-    if (!matches) {
-      console.log(`📋 Post "${post.title}" filtré: account="${post.account}" !== activeAccount="${activeAccount}"`);
-    }
-    return matches;
+    return post.account === activeAccount;
   });
-
-  // Debug du filtrage
-  console.log(`🔍 Filtrage: activeAccount="${activeAccount}", posts totaux: ${posts.length}, posts filtrés: ${filteredPosts.length}`);
-  console.log('📋 Posts par compte:', posts.reduce((acc, post) => {
-    const account = post.account || 'Sans compte';
-    acc[account] = (acc[account] || 0) + 1;
-    return acc;
-  }, {}));
 
   // Mettre à jour un post dans Notion
   const updatePostInNotion = async (postId, newDate) => {
     try {
-      console.log(`🔄 Mise à jour post ${postId} avec date ${newDate}`);
-      
       const response = await fetch(`${API_BASE}/notion`, {
         method: 'POST',
         headers: {
@@ -468,14 +460,6 @@ const InstagramNotionWidget = () => {
       });
 
       const result = await response.json();
-      console.log('✅ Résultat mise à jour:', result);
-      
-      if (result.success) {
-        console.log(`✅ Post ${postId} mis à jour avec succès`);
-      } else {
-        console.error('❌ Erreur mise à jour:', result.error);
-      }
-      
       return result.success;
     } catch (error) {
       console.error('❌ Erreur réseau mise à jour:', error);
@@ -513,20 +497,14 @@ const InstagramNotionWidget = () => {
     setDragOverIndex(null);
 
     if (draggedIndex === null || draggedIndex === dropIndex) {
-      console.log('⚠️ Drag annulé: même position ou pas de drag');
       return;
     }
-
-    console.log(`🔄 Drag & Drop: ${draggedIndex} → ${dropIndex}`);
-    console.log('📋 Posts avant réorganisation:', filteredPosts.map((p, i) => `${i}: ${p.title} (${p.date})`));
 
     try {
       // Créer une copie des posts filtrés pour réorganiser
       const newFilteredPosts = [...filteredPosts];
       const [draggedPost] = newFilteredPosts.splice(draggedIndex, 1);
       newFilteredPosts.splice(dropIndex, 0, draggedPost);
-
-      console.log('📋 Posts après réorganisation locale:', newFilteredPosts.map((p, i) => `${i}: ${p.title}`));
 
       // Calculer les nouvelles dates (posts plus récents en premier)
       const today = new Date();
@@ -538,8 +516,6 @@ const InstagramNotionWidget = () => {
         return { ...post, date: dateString };
       });
 
-      console.log('📅 Nouvelles dates calculées:', postsWithNewDates.map((p, i) => `${i}: ${p.title} → ${p.date}`));
-
       // Mettre à jour l'état immédiatement pour feedback visuel
       const updatedAllPosts = posts.map(post => {
         const updatedPost = postsWithNewDates.find(p => p.id === post.id);
@@ -547,27 +523,16 @@ const InstagramNotionWidget = () => {
       });
 
       setPosts(updatedAllPosts);
-      console.log('✅ État local mis à jour');
 
       // Mettre à jour chaque post dans Notion en parallèle
       const updatePromises = postsWithNewDates.map(async (post, index) => {
         if (post.date !== filteredPosts.find(p => p.id === post.id)?.date) {
-          console.log(`🔄 Mise à jour Notion pour ${post.title}: ${post.date}`);
-          const success = await updatePostInNotion(post.id, post.date);
-          return { postId: post.id, success, title: post.title };
+          return await updatePostInNotion(post.id, post.date);
         }
-        return { postId: post.id, success: true, title: post.title, skipped: true };
+        return true;
       });
 
-      const results = await Promise.all(updatePromises);
-      const successful = results.filter(r => r.success).length;
-      const failed = results.filter(r => !r.success && !r.skipped).length;
-      
-      console.log(`📊 Résultats mise à jour Notion: ${successful} succès, ${failed} échecs`);
-      
-      if (failed > 0) {
-        console.warn('⚠️ Certaines mises à jour ont échoué:', results.filter(r => !r.success));
-      }
+      await Promise.all(updatePromises);
 
     } catch (error) {
       console.error('❌ Erreur lors de la réorganisation:', error);
@@ -695,10 +660,7 @@ const InstagramNotionWidget = () => {
           return (
             <button
               key={account}
-              onClick={() => {
-                console.log(`🔄 Changement de compte: ${activeAccount} → ${account}`);
-                setActiveAccount(account);
-              }}
+              onClick={() => setActiveAccount(account)}
               className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
                 activeAccount === account
                   ? 'bg-blue-600 text-white'
@@ -722,14 +684,7 @@ const InstagramNotionWidget = () => {
         </button>
       </div>
 
-      {/* Debug des comptes (temporaire) */}
-      {posts.length > 0 && (
-        <div className="px-4 mb-2">
-          <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-            Debug: Comptes={accounts.join(', ')} | Actif={activeAccount} | Posts={posts.length} | Filtrés={filteredPosts.length}
-          </div>
-        </div>
-      )}
+      {/* Debug des comptes - SUPPRIMÉ */}
 
       {/* Grille d'images 3x4 avec drag & drop */}
       <div className="grid grid-cols-3 gap-1 p-4">
@@ -889,7 +844,7 @@ const InstagramNotionWidget = () => {
                         >
                           {activeAccount === account ? 'Actif' : 'Activer'}
                         </button>
-                        {account !== 'All' && (
+                        {accounts.length > 1 && (
                           <button
                             onClick={() => removeAccount(account)}
                             className="text-xs text-red-600 hover:text-red-800 px-2"
