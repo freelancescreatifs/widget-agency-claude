@@ -51,8 +51,6 @@ module.exports = async function handler(req, res) {
     // Action de mise à jour d'un post
     if (action === 'updatePost' && postId && newDate) {
       try {
-        console.log(`Mise à jour post ${postId} avec date ${newDate}`);
-        
         const updateResponse = await fetch(`https://api.notion.com/v1/pages/${postId}`, {
           method: 'PATCH',
           headers: {
@@ -70,7 +68,6 @@ module.exports = async function handler(req, res) {
         });
 
         const updateResult = await updateResponse.json();
-        console.log('Résultat mise à jour:', updateResult);
 
         if (updateResponse.ok) {
           res.status(200).json({
@@ -87,7 +84,6 @@ module.exports = async function handler(req, res) {
         }
         return;
       } catch (error) {
-        console.error('Erreur mise à jour:', error);
         res.status(500).json({
           success: false,
           error: "Erreur lors de la mise à jour",
@@ -136,9 +132,6 @@ module.exports = async function handler(req, res) {
       })
       .map(row => {
         const properties = row.properties;
-        
-        // Debug: log des propriétés disponibles
-        console.log('Propriétés disponibles:', Object.keys(properties));
         
         // Extraction du titre
         const title = properties.Titre?.title?.[0]?.text?.content ||
@@ -192,8 +185,6 @@ module.exports = async function handler(req, res) {
                        properties.Compte?.select?.name ||
                        properties.Instagram?.select?.name || '';
 
-        console.log(`Post: ${title}, Account: ${account}, URLs: ${urls.length}`);
-
         return {
           id: row.id,
           title,
@@ -208,19 +199,13 @@ module.exports = async function handler(req, res) {
 
     // Extraction des comptes uniques
     const accounts = [...new Set(posts.map(p => p.account).filter(Boolean))];
-    console.log('Comptes détectés:', accounts);
 
     res.status(200).json({
       success: true,
       posts: posts,
       meta: {
         total: posts.length,
-        accounts: accounts,
-        debug: {
-          totalRows: data.results.length,
-          postsWithMedia: posts.length,
-          sampleProperties: data.results[0] ? Object.keys(data.results[0].properties) : []
-        }
+        accounts: accounts
       }
     });
 
