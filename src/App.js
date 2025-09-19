@@ -243,12 +243,14 @@ const InstagramNotionWidget = () => {
   const [selectedPost, setSelectedPost] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // États pour le drag & drop
+  // États pour le drag & drop INSTANTANÉ
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [tempPosts, setTempPosts] = useState([]); // Posts temporaires pendant le drag
 
-  // États pour multi-comptes
-  const [accounts, setAccounts] = useState(['All']);
+  // États pour multi-comptes SIMPLIFIÉS
+  const [accounts, setAccounts] = useState([]);
   const [activeAccount, setActiveAccount] = useState('All');
   const [isAccountManager, setIsAccountManager] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
@@ -292,6 +294,9 @@ const InstagramNotionWidget = () => {
         if (accounts.length > 0) setActiveAccount(accounts[0]);
       } catch (e) {
         console.error('Erreur parsing accounts:', e);
+        // Démarrer avec aucun compte multi par défaut
+        setAccounts([]);
+        setActiveAccount('All');
       }
     }
 
@@ -320,16 +325,24 @@ const InstagramNotionWidget = () => {
 
       if (data.success) {
         setPosts(data.posts);
+        setTempPosts(data.posts); // Initialiser les posts temporaires
         
-        // Extraire et fusionner les comptes
+        // Extraire et fusionner les comptes seulement s'il y en a
         if (data.meta.accounts && data.meta.accounts.length > 0) {
-          const existingManualAccounts = accounts.filter(acc => !data.meta.accounts.includes(acc) && acc !== 'All');
-          const allAccounts = ['All', ...data.meta.accounts, ...existingManualAccounts];
+          const existingManualAccounts = accounts.filter(acc => !data.meta.accounts.includes(acc));
+          const allAccounts = [...data.meta.accounts, ...existingManualAccounts];
           const uniqueAccounts = [...new Set(allAccounts)];
           
           if (JSON.stringify(uniqueAccounts) !== JSON.stringify(accounts)) {
             setAccounts(uniqueAccounts);
             localStorage.setItem('instagramAccounts', JSON.stringify(uniqueAccounts));
+            
+            // Si c'est le premier setup et qu'il n'y a qu'un compte détecté, rester sur All
+            if (accounts.length === 0 && uniqueAccounts.length === 1) {
+              setActiveAccount('All');
+            } else if (uniqueAccounts.length > 0 && !uniqueAccounts.includes(activeAccount)) {
+              setActiveAccount(uniqueAccounts[0]);
+            }
           }
         }
         
@@ -417,15 +430,14 @@ const InstagramNotionWidget = () => {
     setIsAccountManager(false);
   };
 
-  // Supprimer un compte
+  // Supprimer un compte (maintenant peut supprimer TOUS les comptes)
   const removeAccount = (accountToRemove) => {
-    if (accounts.length <= 1) return;
-    
     const newAccounts = accounts.filter(acc => acc !== accountToRemove);
     setAccounts(newAccounts);
     
+    // Si on supprime le compte actif, revenir à "All" ou le premier disponible
     if (activeAccount === accountToRemove) {
-      setActiveAccount(newAccounts[0]);
+      setActiveAccount(newAccounts.length > 0 ? newAccounts[0] : 'All');
     }
     
     const newProfiles = { ...profiles };
@@ -434,6 +446,20 @@ const InstagramNotionWidget = () => {
     
     localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
     localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+  };
+
+  // Supprimer TOUS les comptes multi
+  const removeAllAccounts = () => {
+    setAccounts([]);
+    setActiveAccount('All');
+    
+    // Garder seulement le profil "All"
+    const newProfiles = { 'All': profiles['All'] || getProfile('All') };
+    setProfiles(newProfiles);
+    
+    localStorage.setItem('instagramAccounts', JSON.stringify([]));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    setIsAccountManager(false);
   };
 
   // Renommer un compte
@@ -473,12 +499,16 @@ const InstagramNotionWidget = () => {
   };
 
   // Filtrer les posts par compte
-  const filteredPosts = posts.filter(post => {
-    if (activeAccount === 'All') {
-      return true;
-    }
-    return post.account === activeAccount;
-  });
+  const getFilteredPosts = (postsToFilter = tempPosts) => {
+    return postsToFilter.filter(post => {
+      if (activeAccount === 'All' || accounts.length === 0) {
+        return true;
+      }
+      return post.account === activeAccount;
+    });
+  };
+
+  const filteredPosts = getFilteredPosts();
 
   // Mettre à jour un post dans Notion
   const updatePostInNotion = async (postId, newDate) => {
@@ -505,15 +535,16 @@ const InstagramNotionWidget = () => {
     }
   };
 
-  // DRAG & DROP - Gestionnaires d'événements CORRIGÉS
+  // DRAG & DROP INSTANTANÉ - Gestionnaires d'événements
   const handleDragStart = (e, index) => {
     console.log(`🎯 Début drag: index ${index}`);
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', index.toString()); // Nécessaire pour certains navigateurs
+    e.dataTransfer.setData('text/plain', index.toString());
     setDraggedIndex(index);
+    setIsDragging(true);
     
     // Style visuel du drag
-    e.target.style.opacity = '0.6';
+    e.target.style.opacity = '0.7';
     e.target.style.transform = 'scale(0.95)';
   };
 
@@ -523,6 +554,7 @@ const InstagramNotionWidget = () => {
     e.target.style.transform = 'scale(1)';
     setDraggedIndex(null);
     setDragOverIndex(null);
+    setIsDragging(false);
   };
 
   const handleDragOver = (e, index) => {
@@ -543,7 +575,6 @@ const InstagramNotionWidget = () => {
   };
 
   const handleDragLeave = (e) => {
-    // Seulement clear si on quitte vraiment l'élément
     const rect = e.currentTarget.getBoundingClientRect();
     const isOutside = (
       e.clientX < rect.left || 
@@ -561,6 +592,7 @@ const InstagramNotionWidget = () => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverIndex(null);
+    setIsDragging(false);
 
     if (draggedIndex === null || draggedIndex === dropIndex) {
       console.log('❌ Drag annulé: même position ou index invalide');
@@ -575,82 +607,79 @@ const InstagramNotionWidget = () => {
       return;
     }
 
-    console.log(`🔄 DRAG & DROP: "${draggedPost.title}" de position ${draggedIndex} → ${dropIndex}`);
+    console.log(`🔄 DRAG & DROP INSTANTANÉ: "${draggedPost.title}" de position ${draggedIndex} → ${dropIndex}`);
 
-    try {
-      // Créer une copie des posts filtrés pour réorganiser
-      const newFilteredPosts = [...filteredPosts];
-      const [movedPost] = newFilteredPosts.splice(draggedIndex, 1);
-      newFilteredPosts.splice(dropIndex, 0, movedPost);
+    // ✨ MISE À JOUR INSTANTANÉE DE L'INTERFACE
+    const newFilteredPosts = [...filteredPosts];
+    const [movedPost] = newFilteredPosts.splice(draggedIndex, 1);
+    newFilteredPosts.splice(dropIndex, 0, movedPost);
 
-      console.log('📋 Nouvel ordre:', newFilteredPosts.map((p, i) => `${i}: ${p.title}`));
+    // Calculer les nouvelles dates
+    const today = new Date();
+    const postsWithNewDates = newFilteredPosts.map((post, index) => {
+      const newDate = new Date(today);
+      newDate.setDate(today.getDate() - index);
+      const dateString = newDate.toISOString().split('T')[0];
+      
+      return { ...post, date: dateString };
+    });
 
-      // Calculer les nouvelles dates (le premier post = le plus récent)
-      const today = new Date();
-      const postsWithNewDates = newFilteredPosts.map((post, index) => {
-        const newDate = new Date(today);
-        newDate.setDate(today.getDate() - index); // Posts plus récents en premier
-        const dateString = newDate.toISOString().split('T')[0];
-        
-        return { ...post, date: dateString };
-      });
+    // Mettre à jour les posts temporaires IMMÉDIATEMENT pour l'interface
+    const updatedTempPosts = tempPosts.map(post => {
+      const updatedPost = postsWithNewDates.find(p => p.id === post.id);
+      return updatedPost || post;
+    });
 
-      console.log('📅 Nouvelles dates:', postsWithNewDates.map((p, i) => `${i}: ${p.title} → ${p.date}`));
+    setTempPosts(updatedTempPosts);
+    console.log('✅ Interface mise à jour instantanément !');
 
-      // Mettre à jour l'état local IMMÉDIATEMENT pour un feedback instantané
-      const updatedAllPosts = posts.map(post => {
-        const updatedPost = postsWithNewDates.find(p => p.id === post.id);
-        return updatedPost || post;
-      });
+    // Message de statut pendant la synchronisation
+    setConnectionStatus('🔄 Synchronisation avec Notion...');
 
-      setPosts(updatedAllPosts);
-      console.log('✅ État local mis à jour immédiatement');
+    // Synchronisation avec Notion en arrière-plan
+    setTimeout(async () => {
+      try {
+        let successCount = 0;
+        let errorCount = 0;
 
-      // Afficher un message de confirmation à l'utilisateur
-      setConnectionStatus('🔄 Réorganisation en cours... Synchronisation avec Notion');
-
-      // Mettre à jour chaque post modifié dans Notion
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const post of postsWithNewDates) {
-        const originalPost = filteredPosts.find(p => p.id === post.id);
-        if (originalPost && originalPost.date !== post.date) {
-          console.log(`📤 Mise à jour Notion: ${post.title} → ${post.date}`);
-          const success = await updatePostInNotion(post.id, post.date);
-          if (success) {
-            successCount++;
-          } else {
-            errorCount++;
+        for (const post of postsWithNewDates) {
+          const originalPost = filteredPosts.find(p => p.id === post.id);
+          if (originalPost && originalPost.date !== post.date) {
+            console.log(`📤 Mise à jour Notion: ${post.title} → ${post.date}`);
+            const success = await updatePostInNotion(post.id, post.date);
+            if (success) {
+              successCount++;
+            } else {
+              errorCount++;
+            }
+            
+            // Petit délai pour éviter de surcharger l'API
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
-          
-          // Petit délai pour éviter de surcharger l'API Notion
-          await new Promise(resolve => setTimeout(resolve, 100));
         }
-      }
 
-      // Message final selon les résultats
-      if (errorCount === 0) {
-        setConnectionStatus(`✅ Réorganisation terminée ! ${successCount} post(s) mis à jour dans Notion`);
+        // Mettre à jour l'état principal après succès
+        setPosts(updatedTempPosts);
+
+        // Message final
+        if (errorCount === 0) {
+          setConnectionStatus(`✅ Synchronisé ! ${successCount} post(s) mis à jour dans Notion`);
+        } else {
+          setConnectionStatus(`⚠️ Sync partielle: ${successCount} réussies, ${errorCount} échouées`);
+        }
+
         setTimeout(() => {
           setConnectionStatus(`✅ Connecté à Notion • ${posts.length} post(s)`);
         }, 3000);
-      } else {
-        setConnectionStatus(`⚠️ Réorganisation partielle: ${successCount} réussies, ${errorCount} échouées`);
-        setTimeout(() => {
-          setConnectionStatus(`✅ Connecté à Notion • ${posts.length} post(s)`);
-        }, 5000);
-      }
 
-    } catch (error) {
-      console.error('❌ Erreur lors de la réorganisation:', error);
-      setConnectionStatus('❌ Erreur lors de la réorganisation. Rechargement...');
-      
-      // En cas d'erreur, recharger les posts depuis Notion après 2 secondes
-      setTimeout(() => {
-        fetchPosts();
-      }, 2000);
-    }
+      } catch (error) {
+        console.error('❌ Erreur synchronisation:', error);
+        setConnectionStatus('❌ Erreur de synchronisation');
+        // Revenir aux posts originaux en cas d'erreur
+        setTempPosts(posts);
+        setTimeout(() => fetchPosts(), 2000);
+      }
+    }, 300); // Délai court pour que l'utilisateur voie l'effet instantané
 
     setDraggedIndex(null);
   };
@@ -662,6 +691,9 @@ const InstagramNotionWidget = () => {
   });
 
   const currentProfile = getProfile(activeAccount);
+
+  // Interface simplifiée : cacher les onglets s'il n'y a qu'un seul compte ou aucun
+  const showTabs = accounts.length > 0;
 
   return (
     <div className="w-full max-w-md mx-auto bg-white">
@@ -762,43 +794,60 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Onglets comptes */}
-      <div className="flex items-center space-x-2 px-4 mb-4 overflow-x-auto">
-        {accounts.map((account) => {
-          const accountPostCount = account === 'All' 
-            ? posts.length 
-            : posts.filter(p => p.account === account).length;
-            
-          return (
-            <button
-              key={account}
-              onClick={() => setActiveAccount(account)}
-              className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
-                activeAccount === account
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {account}
-              <span className="ml-1 text-xs opacity-75">
-                ({accountPostCount})
-              </span>
-            </button>
-          );
-        })}
-        
+      {/* Onglets comptes - SEULEMENT si on a des comptes multi */}
+      {showTabs && (
+        <div className="flex items-center space-x-2 px-4 mb-4 overflow-x-auto">
+          {/* Onglet "All" seulement si on a des comptes multi */}
+          <button
+            onClick={() => setActiveAccount('All')}
+            className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
+              activeAccount === 'All'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            All
+            <span className="ml-1 text-xs opacity-75">
+              ({posts.length})
+            </span>
+          </button>
+
+          {accounts.map((account) => {
+            const accountPostCount = posts.filter(p => p.account === account).length;
+              
+            return (
+              <button
+                key={account}
+                onClick={() => setActiveAccount(account)}
+                className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
+                  activeAccount === account
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {account}
+                <span className="ml-1 text-xs opacity-75">
+                  ({accountPostCount})
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Bouton + pour gérer les comptes - TOUJOURS visible */}
+      <div className="flex justify-center px-4 mb-4">
         <button
           onClick={() => setIsAccountManager(true)}
-          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+          className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-3 py-2 rounded-full transition-colors"
           title="Gérer les comptes"
         >
           <Plus size={16} />
+          <span>{accounts.length === 0 ? 'Ajouter des comptes' : 'Gérer les comptes'}</span>
         </button>
       </div>
 
-      {/* Debug des comptes - SUPPRIMÉ */}
-
-      {/* Grille d'images 3x4 avec drag & drop */}
+      {/* Grille d'images 3x4 avec drag & drop INSTANTANÉ */}
       <div className="grid grid-cols-3 gap-1 p-4">
         {gridItems.map((post, index) => (
           <div
@@ -807,7 +856,7 @@ const InstagramNotionWidget = () => {
               dragOverIndex === index 
                 ? 'bg-blue-200 scale-105 border-2 border-blue-500 shadow-lg ring-2 ring-blue-300' 
                 : draggedIndex === index
-                ? 'bg-gray-200 opacity-50'
+                ? 'bg-gray-200 opacity-60 scale-95'
                 : 'hover:scale-102'
             }`}
             style={{ aspectRatio: '1080/1350' }}
@@ -826,7 +875,7 @@ const InstagramNotionWidget = () => {
                 onDragEnd={handleDragEnd}
                 onClick={(e) => {
                   // Seulement ouvrir la modal si on n'est pas en train de glisser
-                  if (draggedIndex === null) {
+                  if (!isDragging) {
                     setSelectedPost(post);
                     setModalOpen(true);
                   }
@@ -834,11 +883,11 @@ const InstagramNotionWidget = () => {
               >
                 <MediaDisplay urls={post.urls} type={post.type} caption={post.caption} />
                 
-                {/* Indicateur de drag */}
+                {/* Indicateur de drag instantané */}
                 {draggedIndex === index && (
-                  <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-blue-500 bg-opacity-30 flex items-center justify-center">
                     <div className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                      Déplacement...
+                      Glissement...
                     </div>
                   </div>
                 )}
@@ -852,9 +901,9 @@ const InstagramNotionWidget = () => {
                 }`}
               >
                 <div className="text-center">
-                  <div>{dragOverIndex === index ? 'Déposer ici' : 'Vide'}</div>
+                  <div>{dragOverIndex === index ? '📍 Déposer ici' : 'Vide'}</div>
                   <div className="text-xs mt-1">
-                    {dragOverIndex === index ? '📍' : 'Position ' + (index + 1)}
+                    {dragOverIndex === index ? '' : 'Position ' + (index + 1)}
                   </div>
                 </div>
               </div>
@@ -926,7 +975,7 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Gestion des comptes */}
+      {/* Gestion des comptes SIMPLIFIÉE */}
       {isAccountManager && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
@@ -962,93 +1011,107 @@ const InstagramNotionWidget = () => {
               </div>
 
               {/* Liste des comptes */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Comptes existants
-                </label>
-                <div className="space-y-2">
-                  {accounts.map((account) => (
-                    <div key={account} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                      {editingAccount === account ? (
-                        <div className="flex-1 flex items-center space-x-2">
-                          <input
-                            type="text"
-                            value={editAccountName}
-                            onChange={(e) => setEditAccountName(e.target.value)}
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter') {
-                                renameAccount(account, editAccountName);
-                              } else if (e.key === 'Escape') {
-                                setEditingAccount(null);
-                                setEditAccountName('');
-                              }
-                            }}
-                            className="flex-1 p-1 text-sm border rounded focus:ring-2 focus:ring-blue-500"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => renameAccount(account, editAccountName)}
-                            className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingAccount(null);
-                              setEditAccountName('');
-                            }}
-                            className="text-xs bg-gray-400 text-white px-2 py-1 rounded hover:bg-gray-500"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium">{account}</span>
+              {accounts.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Comptes existants
+                  </label>
+                  <div className="space-y-2">
+                    {accounts.map((account) => (
+                      <div key={account} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                        {editingAccount === account ? (
+                          <div className="flex-1 flex items-center space-x-2">
+                            <input
+                              type="text"
+                              value={editAccountName}
+                              onChange={(e) => setEditAccountName(e.target.value)}
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  renameAccount(account, editAccountName);
+                                } else if (e.key === 'Escape') {
+                                  setEditingAccount(null);
+                                  setEditAccountName('');
+                                }
+                              }}
+                              className="flex-1 p-1 text-sm border rounded focus:ring-2 focus:ring-blue-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => renameAccount(account, editAccountName)}
+                              className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+                            >
+                              ✓
+                            </button>
                             <button
                               onClick={() => {
-                                setEditingAccount(account);
-                                setEditAccountName(account);
+                                setEditingAccount(null);
+                                setEditAccountName('');
                               }}
-                              className="text-xs text-blue-600 hover:text-blue-800"
-                              title="Renommer"
+                              className="text-xs bg-gray-400 text-white px-2 py-1 rounded hover:bg-gray-500"
                             >
-                              ✏️
+                              ✕
                             </button>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => setActiveAccount(account)}
-                              className={`text-xs px-3 py-1 rounded-full transition-colors ${
-                                activeAccount === account 
-                                  ? 'bg-blue-600 text-white' 
-                                  : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
-                              }`}
-                            >
-                              {activeAccount === account ? 'Actif' : 'Activer'}
-                            </button>
-                            {accounts.length > 1 && (
+                        ) : (
+                          <>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{account}</span>
+                              <button
+                                onClick={() => {
+                                  setEditingAccount(account);
+                                  setEditAccountName(account);
+                                }}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                                title="Renommer"
+                              >
+                                ✏️
+                              </button>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => setActiveAccount(account)}
+                                className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                                  activeAccount === account 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                                }`}
+                              >
+                                {activeAccount === account ? 'Actif' : 'Activer'}
+                              </button>
                               <button
                                 onClick={() => removeAccount(account)}
                                 className="text-xs text-red-600 hover:text-red-800 px-2"
                               >
                                 Supprimer
                               </button>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bouton supprimer TOUS les comptes */}
+                  <div className="mt-4 pt-4 border-t">
+                    <button
+                      onClick={removeAllAccounts}
+                      className="w-full text-sm text-red-600 hover:text-red-800 hover:bg-red-50 py-2 px-3 rounded-lg transition-colors"
+                    >
+                      🗑️ Supprimer tous les comptes (revenir à un seul compte)
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="bg-yellow-50 p-3 rounded-lg text-xs">
                 <p className="font-medium mb-1">💡 Instructions :</p>
                 <p className="text-gray-600 leading-relaxed">
-                  Dans Notion, créez une colonne "Compte Instagram" (type: Select) avec vos comptes (Freelance Créatif, Business, etc.) puis assignez chaque post à un compte.<br/>
-                  <strong>Astuce :</strong> Cliquez sur ✏️ pour renommer n'importe quel compte (y compris "All").
+                  {accounts.length === 0 ? (
+                    <>Ajoutez des comptes pour organiser vos posts par thème. Dans Notion, créez une colonne "Compte Instagram" (type: Select) avec vos comptes puis assignez chaque post à un compte.</>
+                  ) : (
+                    <>Dans Notion, créez une colonne "Compte Instagram" (type: Select) avec vos comptes (Freelance Créatif, Business, etc.) puis assignez chaque post à un compte.<br/>
+                    <strong>Astuce :</strong> Cliquez sur ✏️ pour renommer n'importe quel compte.</>
+                  )}
                 </p>
               </div>
             </div>
