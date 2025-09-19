@@ -1,1003 +1,761 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play } from 'lucide-react';
 
 // Configuration de l'API
 const API_BASE = 'https://widget-agency-claude.vercel.app/api';
 
-// Composant Modal plein écran
-const PostModal = ({ post, onClose, onPrevious, onNext, hasPrevious, hasNext }) => {
+// Composant pour afficher les médias
+const MediaDisplay = ({ urls, type }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  if (!post) return null;
-
-  const handlePrevious = () => {
-    if (post.urls.length > 1) {
-      setCurrentIndex(prev => prev === 0 ? post.urls.length - 1 : prev - 1);
-    }
-  };
-
-  const handleNext = () => {
-    if (post.urls.length > 1) {
-      setCurrentIndex(prev => (prev + 1) % post.urls.length);
-    }
-  };
-
-  const currentUrl = post.urls[currentIndex] || post.urls[0];
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-      <div className="relative w-full h-full flex items-center justify-center">
-        {/* Bouton fermer */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
-        >
-          <X className="w-8 h-8" />
-        </button>
-
-        {/* Navigation entre posts */}
-        {hasPrevious && (
-          <button
-            onClick={onPrevious}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-10"
-          >
-            <ChevronLeft className="w-8 h-8" />
-          </button>
-        )}
-
-        {hasNext && (
-          <button
-            onClick={onNext}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-10"
-          >
-            <ChevronRight className="w-8 h-8" />
-          </button>
-        )}
-
-        {/* Contenu principal */}
-        <div className="flex items-center justify-center w-full h-full p-8">
-          <div className="relative max-w-md max-h-full">
-            {/* Média */}
-            <div className="relative">
-              {post.type === 'Vidéo' ? (
-                <video
-                  src={currentUrl}
-                  className="max-w-full max-h-[80vh] object-contain"
-                  controls
-                  autoPlay
-                />
-              ) : (
-                <img
-                  src={currentUrl}
-                  alt={post.title}
-                  className="max-w-full max-h-[80vh] object-contain"
-                />
-              )}
-
-              {/* Navigation carrousel dans modal */}
-              {post.type === 'Carrousel' && post.urls.length > 1 && (
-                <>
-                  <button
-                    onClick={handlePrevious}
-                    className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white p-2 rounded-full"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={handleNext}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white p-2 rounded-full"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-
-                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                    {post.urls.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentIndex(index)}
-                        className={`w-2 h-2 rounded-full ${
-                          index === currentIndex ? 'bg-white' : 'bg-white bg-opacity-50'
-                        }`}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                    {currentIndex + 1}/{post.urls.length}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Informations du post */}
-            <div className="mt-4 text-white text-center">
-              <h3 className="font-semibold text-lg mb-2">{post.title}</h3>
-              {post.caption && (
-                <p className="text-sm text-gray-300 whitespace-pre-line">{post.caption}</p>
-              )}
-              <p className="text-xs text-gray-400 mt-2">{post.date}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant pour afficher les erreurs
-const ErrorDisplay = ({ error, onClose, onRetry }) => {
-  if (!error) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full">
-        <div className="p-4 border-b flex justify-between items-center">
-          <div className="flex items-center gap-2 text-red-600">
-            <AlertTriangle className="w-5 h-5" />
-            <h3 className="font-semibold">Erreur</h3>
-          </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="p-4 space-y-4">
-          <p className="text-gray-700">{error.message || error.error}</p>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={onRetry}
-              className="flex-1 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-            >
-              Réessayer
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            >
-              Fermer
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant pour les médias avec CAPTION dans le hover
-const MediaDisplay = ({ urls, type, index, onClick, caption, title }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  const handlePrevious = (e) => {
-    e.stopPropagation();
-    setCurrentIndex(prev => prev === 0 ? urls.length - 1 : prev - 1);
-  };
-
-  const handleNext = (e) => {
-    e.stopPropagation();
-    setCurrentIndex(prev => (prev + 1) % urls.length);
-  };
-
-  const handleDotClick = (e, dotIndex) => {
-    e.stopPropagation();
-    setCurrentIndex(dotIndex);
-  };
-
+  
   if (!urls || urls.length === 0) {
     return (
-      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-        <span className="text-gray-400 text-sm">Post {index + 1}</span>
+      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+        <span className="text-gray-500">Pas de média</span>
       </div>
     );
   }
 
-  const currentUrl = urls[currentIndex] || urls[0];
+  const isVideo = (url) => {
+    return url.match(/\.(mp4|mov|webm|avi)(\?|$)/i) || type === 'Vidéo';
+  };
+
+  const currentUrl = urls[currentIndex];
+  const isCurrentVideo = isVideo(currentUrl);
 
   return (
-    <div 
-      className="relative w-full h-full overflow-hidden bg-gray-100 cursor-pointer"
-      onClick={onClick}
-    >
-      {type === 'Vidéo' ? (
+    <div className="relative w-full h-full group">
+      {isCurrentVideo ? (
         <video
           src={currentUrl}
           className="w-full h-full object-cover"
           style={{ aspectRatio: '1080/1350' }}
+          controls={false}
           muted
-          onMouseEnter={(e) => e.target.play()}
-          onMouseLeave={(e) => e.target.pause()}
+          loop
         />
       ) : (
         <img
           src={currentUrl}
-          alt=""
+          alt="Post"
           className="w-full h-full object-cover"
           style={{ aspectRatio: '1080/1350' }}
           onError={(e) => {
-            e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTA4MCIgaGVpZ2h0PSIxMzUwIiB2aWV3Qm94PSIwIDAgMTA4MCAxMzUwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMTA4MCIgaGVpZ2h0PSIxMzUwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik01NDAgNjc1QzU2Ni01MjIgNjIyIDQ2NiA2NzUgNDY2QzcyOCA0NjYgNzg0IDUyMiA3ODQgNTc1Qzc4NCA2MjggNzI4IDY4NCA2NzUgNjg0QzYyMiA2ODQgNTY2IDYyOCA1NjYgNTc1WiIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
+            e.target.src = `https://picsum.photos/1080/1350?random=${Date.now()}`;
           }}
         />
       )}
 
-      {/* Icônes de type */}
-      {type === 'Carrousel' && (
-        <div className="absolute top-2 right-2">
-          <div className="flex gap-0.5">
-            <div className="w-1 h-3 bg-white rounded-full shadow"></div>
-            <div className="w-1 h-3 bg-white rounded-full shadow"></div>
-            <div className="w-1 h-3 bg-white rounded-full shadow"></div>
-          </div>
-        </div>
-      )}
-
-      {type === 'Vidéo' && (
-        <div className="absolute top-2 right-2">
-          <svg width="16" height="12" viewBox="0 0 16 12" className="text-white drop-shadow-md">
-            <rect x="0" y="2" width="10" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-            <polygon points="11,4 15,2 15,10 11,8" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+      {/* Icônes type de contenu */}
+      {urls.length > 1 && (
+        <div className="absolute top-2 right-2 text-white drop-shadow-md">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="6" height="18"/>
+            <rect x="9" y="3" width="6" height="18"/>
+            <rect x="15" y="3" width="6" height="18"/>
           </svg>
         </div>
       )}
+      
+      {isCurrentVideo && (
+        <div className="absolute top-2 right-2 text-white drop-shadow-md">
+          <Play size={16} fill="currentColor" />
+        </div>
+      )}
 
-      {/* Navigation carrousel MANUELLE SEULEMENT */}
-      {type === 'Carrousel' && urls.length > 1 && (
+      {/* Navigation carrousel */}
+      {urls.length > 1 && (
         <>
-          <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-            {currentIndex + 1}/{urls.length}
-          </div>
-
           <button
-            onClick={handlePrevious}
-            className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-40 hover:bg-opacity-60 text-white p-1 rounded-full z-10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCurrentIndex(prev => prev > 0 ? prev - 1 : urls.length - 1);
+            }}
+            className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft size={16} />
+          </button>
+          
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setCurrentIndex(prev => prev < urls.length - 1 ? prev + 1 : 0);
+            }}
+            className="absolute right-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <ChevronRight size={16} />
           </button>
 
-          <button
-            onClick={handleNext}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-40 hover:bg-opacity-60 text-white p-1 rounded-full z-10"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-
-          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1">
-            {urls.map((_, dotIndex) => (
+          {/* Points de navigation */}
+          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
+            {urls.map((_, index) => (
               <button
-                key={dotIndex}
-                onClick={(e) => handleDotClick(e, dotIndex)}
-                className={`w-2 h-2 rounded-full transition-all z-10 ${
-                  dotIndex === currentIndex ? 'bg-white' : 'bg-white bg-opacity-50'
+                key={index}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentIndex(index);
+                }}
+                className={`w-1.5 h-1.5 rounded-full ${
+                  index === currentIndex ? 'bg-white' : 'bg-white bg-opacity-50'
                 }`}
               />
             ))}
           </div>
         </>
       )}
+    </div>
+  );
+};
 
-      {/* Caption hover - 1/3 DE LA PAGE avec CAPTION */}
-      {onClick && (
-        <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-60 transition-all duration-200 flex items-end opacity-0 hover:opacity-100">
-          <div className="w-full h-1/3 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center p-4">
-            <div className="text-white text-center text-xs">
-              {caption ? (
-                <div className="space-y-1">
-                  <div className="font-medium">{title || 'Post'}</div>
-                  <div className="text-gray-300 line-clamp-2">{caption}</div>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <div className="font-medium">Cliquer pour voir en détail</div>
-                  {type === 'Carrousel' && <div className="text-gray-300">{urls.length} photos</div>}
-                  {type === 'Vidéo' && <div className="text-gray-300">📹 Vidéo</div>}
-                </div>
-              )}
-            </div>
+// Composant Modal pour affichage détaillé
+const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  if (!isOpen || !post) return null;
+
+  const urls = post.urls || [];
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+        {/* Bouton fermer */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+        >
+          <X size={24} />
+        </button>
+
+        {/* Navigation entre posts */}
+        {onNavigate && (
+          <>
+            <button
+              onClick={() => onNavigate('prev')}
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-10"
+            >
+              <ChevronLeft size={32} />
+            </button>
+            <button
+              onClick={() => onNavigate('next')}
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-10"
+            >
+              <ChevronRight size={32} />
+            </button>
+          </>
+        )}
+
+        <div className="flex flex-col items-center">
+          {/* Média principal */}
+          <div className="relative">
+            {urls[currentIndex] && (
+              <>
+                {post.type === 'Vidéo' ? (
+                  <video
+                    src={urls[currentIndex]}
+                    className="max-w-md max-h-[70vh] object-contain"
+                    controls
+                    autoPlay
+                  />
+                ) : (
+                  <img
+                    src={urls[currentIndex]}
+                    alt={post.title}
+                    className="max-w-md max-h-[70vh] object-contain"
+                  />
+                )}
+
+                {/* Navigation carrousel dans modal */}
+                {urls.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => setCurrentIndex(prev => prev > 0 ? prev - 1 : urls.length - 1)}
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button
+                      onClick={() => setCurrentIndex(prev => prev < urls.length - 1 ? prev + 1 : 0)}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                    
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                      {urls.map((_, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setCurrentIndex(index)}
+                          className={`w-2 h-2 rounded-full ${
+                            index === currentIndex ? 'bg-white' : 'bg-white bg-opacity-50'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Informations du post */}
+          <div className="text-white text-center mt-4 max-w-md">
+            <h3 className="text-lg font-semibold mb-2">{post.title}</h3>
+            {post.caption && <p className="text-sm text-gray-300 mb-2">{post.caption}</p>}
+            <p className="text-xs text-gray-400">
+              {post.date && new Date(post.date).toLocaleDateString('fr-FR')}
+            </p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
 
 // Composant principal
 const InstagramNotionWidget = () => {
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isProfileEdit, setIsProfileEdit] = useState(false);
+  const [notionApiKey, setNotionApiKey] = useState('');
+  const [databaseId, setDatabaseId] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState('');
   const [posts, setPosts] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [activeAccount, setActiveAccount] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('Non connecté');
-  const [showSettings, setShowSettings] = useState(false);
-  const [error, setError] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
-  const [notionConfig, setNotionConfig] = useState({
-    apiKey: '',
-    databaseId: ''
-  });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [draggedPost, setDraggedPost] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
-  // Profils par compte - SANS PROFIL PAR DÉFAUT
+  // Profil par défaut
   const [profiles, setProfiles] = useState({});
-  const [editingProfile, setEditingProfile] = useState(false);
+  
+  const getProfile = (account) => {
+    return profiles[account] || {
+      username: account || 'mon_compte',
+      fullName: `${account || 'Mon'} Compte`,
+      bio: `🚀 Créateur de contenu\n📸 ${account || 'Mon compte'} officiel\n📍 Paris, France`,
+      profilePhoto: '',
+      posts: '0',
+      followers: '1,234',
+      following: '567'
+    };
+  };
 
-  // Charger la configuration sauvegardée
+  // Charger les données au démarrage
   useEffect(() => {
-    try {
-      const savedConfig = localStorage.getItem('notion-config');
-      const savedProfiles = localStorage.getItem('profiles-config');
-      
-      if (savedConfig) {
-        setNotionConfig(JSON.parse(savedConfig));
-      }
-      if (savedProfiles) {
+    const savedApiKey = localStorage.getItem('notionApiKey');
+    const savedDbId = localStorage.getItem('databaseId');
+    const savedProfiles = localStorage.getItem('instagramProfiles');
+    
+    if (savedApiKey) setNotionApiKey(savedApiKey);
+    if (savedDbId) setDatabaseId(savedDbId);
+    if (savedProfiles) {
+      try {
         setProfiles(JSON.parse(savedProfiles));
+      } catch (e) {
+        console.error('Erreur parsing profiles:', e);
       }
-    } catch (err) {
-      console.warn('Erreur lors du chargement de la config:', err);
+    }
+
+    if (savedApiKey && savedDbId) {
+      fetchPosts(savedApiKey, savedDbId);
     }
   }, []);
 
-  // Fermer automatiquement les paramètres après connexion réussie
-  useEffect(() => {
-    if (connectionStatus.includes('✅')) {
-      setShowSettings(false);
-    }
-  }, [connectionStatus]);
-
-  // Connexion à Notion
-  const connectToNotion = async () => {
-    if (!notionConfig.apiKey || !notionConfig.databaseId) {
-      setError({
-        message: 'Veuillez remplir la clé API et l\'ID de base',
-        code: 'MISSING_CREDENTIALS'
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    setConnectionStatus('🔄 Connexion...');
-    setError(null);
-
+  // Fetch posts from Notion
+  const fetchPosts = async (apiKey = notionApiKey, dbId = databaseId) => {
     try {
+      setConnectionStatus('Connexion en cours...');
+      
       const response = await fetch(`${API_BASE}/notion`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          apiKey: notionConfig.apiKey,
-          databaseId: notionConfig.databaseId
+          apiKey: apiKey,
+          databaseId: dbId,
         }),
       });
 
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
-        setError(data);
-        setConnectionStatus(`❌ ${data.error || 'Erreur de connexion'}`);
-        return;
-      }
-
-      // Succès !
-      const validPosts = Array.isArray(data.posts) ? data.posts : [];
-      setPosts(validPosts);
-      
-      // DÉTECTION AUTOMATIQUE des comptes depuis Notion
-      const uniqueAccounts = [...new Set(validPosts.map(post => post.account).filter(Boolean))];
-      
-      console.log('Comptes détectés depuis Notion:', uniqueAccounts);
-      
-      if (uniqueAccounts.length > 0) {
+      if (data.success) {
+        setPosts(data.posts);
+        
+        // Extraire les comptes automatiquement
+        const uniqueAccounts = [...new Set(data.posts.map(post => post.account || 'Principal').filter(Boolean))];
         setAccounts(uniqueAccounts);
         
-        // Si pas de compte actif ou compte actif plus dans la liste, prendre le premier
-        if (!activeAccount || !uniqueAccounts.includes(activeAccount)) {
+        if (!activeAccount && uniqueAccounts.length > 0) {
           setActiveAccount(uniqueAccounts[0]);
         }
-        
-        // Créer des profils par défaut pour les nouveaux comptes détectés
-        const newProfiles = { ...profiles };
-        uniqueAccounts.forEach(account => {
-          if (!newProfiles[account]) {
-            newProfiles[account] = {
-              username: account.toLowerCase().replace(/\s+/g, '_'),
-              fullName: account,
-              bio: `🚀 Compte ${account}\n📸 Contenu créatif\n✨ Créé avec @Freelancecreatif`,
-              profilePhoto: '',
-              stats: {
-                posts: 'auto',
-                followers: '1,234',
-                following: '567'
-              }
-            };
-          }
-        });
-        setProfiles(newProfiles);
-        
-        // Sauvegarder les profils
-        localStorage.setItem('profiles-config', JSON.stringify(newProfiles));
+
+        setConnectionStatus(`✅ Connecté à Notion • ${data.posts.length} post(s)`);
+        setIsConfigOpen(false);
       } else {
-        // Aucun compte détecté
-        setAccounts([]);
-        setActiveAccount('');
+        setConnectionStatus(`❌ Erreur: ${data.error}`);
       }
-      
-      const total = data.meta?.total || 0;
-      const withMedia = data.meta?.withMedia || validPosts.length;
-      
-      setConnectionStatus(`✅ Connecté à Notion • ${withMedia}/${total} post(s)`);
-      
-      // Sauvegarder la config
-      localStorage.setItem('notion-config', JSON.stringify(notionConfig));
-
     } catch (error) {
-      console.error('❌ Connection Error:', error);
-      setError({
-        message: 'Erreur de connexion',
-        type: 'network'
+      setConnectionStatus('❌ Erreur de connexion Notion');
+      console.error('Erreur:', error);
+    }
+  };
+
+  // Connecter à Notion
+  const connectToNotion = async () => {
+    if (!notionApiKey || !databaseId) {
+      setConnectionStatus('❌ Veuillez remplir tous les champs');
+      return;
+    }
+
+    localStorage.setItem('notionApiKey', notionApiKey);
+    localStorage.setItem('databaseId', databaseId);
+    
+    await fetchPosts();
+  };
+
+  // Sauvegarder profil
+  const saveProfile = (account, profileData) => {
+    const newProfiles = { ...profiles, [account]: profileData };
+    setProfiles(newProfiles);
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+  };
+
+  // Filtrer les posts par compte actif
+  const filteredPosts = posts.filter(post => 
+    !activeAccount || post.account === activeAccount || (activeAccount === 'Principal' && !post.account)
+  );
+
+  // Drag & Drop handlers
+  const handleDragStart = (e, post, index) => {
+    setDraggedPost({ post, index });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = async (e, dropIndex) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+
+    if (!draggedPost || draggedPost.index === dropIndex) {
+      setDraggedPost(null);
+      return;
+    }
+
+    try {
+      // Créer une nouvelle liste réorganisée
+      const newPosts = [...filteredPosts];
+      const [movedPost] = newPosts.splice(draggedPost.index, 1);
+      newPosts.splice(dropIndex, 0, movedPost);
+
+      // Mettre à jour les dates pour refléter le nouvel ordre
+      const today = new Date();
+      const updatedPosts = newPosts.map((post, index) => {
+        const newDate = new Date(today);
+        newDate.setDate(today.getDate() + index);
+        return { ...post, date: newDate.toISOString().split('T')[0] };
       });
-      setConnectionStatus('❌ Erreur de connexion');
-    } finally {
-      setIsLoading(false);
+
+      // Mettre à jour l'état local immédiatement
+      const allPostsUpdated = posts.map(p => {
+        const updated = updatedPosts.find(up => up.id === p.id);
+        return updated || p;
+      });
+      setPosts(allPostsUpdated);
+
+      // Optionnel: Synchroniser avec Notion (si vous avez cette API)
+      console.log('Posts réorganisés:', updatedPosts);
+      
+    } catch (error) {
+      console.error('Erreur réorganisation:', error);
     }
+
+    setDraggedPost(null);
   };
 
-  // Sauvegarde du profil
-  const saveProfile = () => {
-    localStorage.setItem('profiles-config', JSON.stringify(profiles));
-    setEditingProfile(false);
-  };
+  // Créer une grille de 12 éléments (3x4)
+  const gridItems = Array.from({ length: 12 }, (_, index) => {
+    const post = filteredPosts[index];
+    return post || null;
+  });
 
-  // Filtrer les posts par compte actuel
-  const filteredPosts = activeAccount ? posts.filter(post => post.account === activeAccount) : [];
-
-  // Profil du compte actuel
-  const currentProfile = activeAccount ? profiles[activeAccount] : null;
-
-  // Gestion de la modal
-  const openModal = (post) => {
-    setSelectedPost(post);
-  };
-
-  const closeModal = () => {
-    setSelectedPost(null);
-  };
-
-  const navigatePost = (direction) => {
-    if (!selectedPost) return;
-    const currentIndex = filteredPosts.findIndex(p => p.id === selectedPost.id);
-    let newIndex;
-    
-    if (direction === 'previous') {
-      newIndex = currentIndex > 0 ? currentIndex - 1 : filteredPosts.length - 1;
-    } else {
-      newIndex = currentIndex < filteredPosts.length - 1 ? currentIndex + 1 : 0;
-    }
-    
-    setSelectedPost(filteredPosts[newIndex]);
-  };
-
-  // Message si pas de compte
-  if (accounts.length === 0 && !isLoading) {
-    return (
-      <div className="w-full max-w-md mx-auto bg-white relative">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="flex items-center gap-3">
-            <Camera className="w-6 h-6" />
-            <span className="font-semibold text-lg">Instagram</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={connectToNotion}
-              disabled={isLoading}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
-              title="Actualiser"
-            >
-              <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="text-gray-600 hover:text-gray-800"
-              title="Paramètres"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Configuration Notion */}
-        {(showSettings || !connectionStatus.includes('✅')) && (
-          <div className="border-b bg-gray-50 p-4 space-y-4">
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <h3 className="font-medium text-blue-800 mb-2">Configuration Notion</h3>
-              <p className="text-sm text-blue-700 mb-3">
-                Clé API format : <code className="bg-blue-100 px-1 rounded">ntn_...</code> 
-                <br />
-                <a href="https://notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                  Créer une intégration →
-                </a>
-              </p>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Clé API Notion
-                  </label>
-                  <input
-                    type="password"
-                    value={notionConfig.apiKey}
-                    onChange={(e) => setNotionConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                    placeholder="ntn_abc123..."
-                    className="w-full p-2 border rounded text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ID de la base (32 caractères)
-                  </label>
-                  <input
-                    type="text"
-                    value={notionConfig.databaseId}
-                    onChange={(e) => setNotionConfig(prev => ({ ...prev, databaseId: e.target.value }))}
-                    placeholder="abc123def456..."
-                    className="w-full p-2 border rounded text-sm"
-                  />
-                </div>
-                
-                <button
-                  onClick={connectToNotion}
-                  disabled={isLoading}
-                  className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:opacity-50"
-                >
-                  {isLoading ? 'Connexion...' : 'Connecter à Notion'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Status */}
-        <div className="px-4 py-2 bg-gray-50 text-sm text-gray-600 border-b flex items-center justify-between">
-          <span>{connectionStatus}</span>
-          {connectionStatus.includes('❌') && (
-            <WifiOff className="w-4 h-4 text-red-500" />
-          )}
-          {connectionStatus.includes('✅') && (
-            <Wifi className="w-4 h-4 text-green-500" />
-          )}
-        </div>
-
-        {/* Message d'instruction */}
-        <div className="p-8 text-center text-gray-500">
-          <Camera className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium mb-2">Configurez vos comptes Instagram</h3>
-          <div className="space-y-2 text-sm">
-            <p>1. Connectez votre base Notion ci-dessus</p>
-            <p>2. Ajoutez une colonne <strong>"Compte Instagram"</strong> dans Notion</p>
-            <p>3. Créez vos comptes : "Business", "Personnel", "Freelance Créatif"...</p>
-            <p>4. Assignez vos posts aux comptes dans Notion</p>
-            <p>5. Les onglets apparaîtront automatiquement ici ! ✨</p>
-          </div>
-          
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg text-blue-800 text-sm">
-            <p className="font-medium mb-1">💡 Astuce :</p>
-            <p>Les comptes sont détectés automatiquement depuis votre base Notion. Plus besoin de les ajouter manuellement !</p>
-          </div>
-        </div>
-
-        {/* Filigrane en bas */}
-        <div className="w-full flex justify-center py-2 bg-gray-50 border-t">
-          <a 
-            href="https://www.instagram.com/freelance.creatif/" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Créé par @Freelancecreatif
-          </a>
-        </div>
-
-        {/* Modal d'erreur */}
-        <ErrorDisplay 
-          error={error}
-          onClose={() => setError(null)}
-          onRetry={connectToNotion}
-        />
-      </div>
-    );
-  }
+  const currentProfile = getProfile(activeAccount);
 
   return (
-    <div className="w-full max-w-md mx-auto bg-white relative">
-      {/* Header */}
+    <div className="w-full max-w-md mx-auto bg-white">
+      {/* Header Instagram */}
       <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-3">
-          <Camera className="w-6 h-6" />
+        <div className="flex items-center space-x-3">
+          <Camera size={24} />
           <span className="font-semibold text-lg">Instagram</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center space-x-2">
           <button
-            onClick={connectToNotion}
-            disabled={isLoading}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+            onClick={() => fetchPosts()}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             title="Actualiser"
           >
-            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw size={20} />
           </button>
           <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="text-gray-600 hover:text-gray-800"
+            onClick={() => setIsConfigOpen(true)}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             title="Paramètres"
           >
-            <Settings className="w-5 h-5" />
+            <Settings size={20} />
           </button>
         </div>
       </div>
 
-      {/* Profil */}
-      {currentProfile && (
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-4">
-            <div 
-              className="relative cursor-pointer"
-              onClick={() => setEditingProfile(true)}
-            >
-              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 p-0.5">
-                <div className="w-full h-full rounded-full bg-white p-0.5">
-                  {currentProfile.profilePhoto ? (
-                    <img 
-                      src={currentProfile.profilePhoto} 
-                      alt="Profil" 
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded-full bg-gray-200 flex items-center justify-center">
-                      <Camera className="w-8 h-8 text-gray-400" />
-                    </div>
-                  )}
-                </div>
+      {/* Profil Instagram */}
+      <div className="p-4">
+        <div className="flex items-center space-x-4 mb-4">
+          <div 
+            className="relative cursor-pointer group"
+            onClick={() => setIsProfileEdit(true)}
+          >
+            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 p-0.5">
+              <div className="w-full h-full rounded-full bg-white p-0.5">
+                {currentProfile.profilePhoto ? (
+                  <img
+                    src={currentProfile.profilePhoto}
+                    alt="Profile"
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-gray-200 flex items-center justify-center">
+                    <Camera size={24} className="text-gray-500" />
+                  </div>
+                )}
               </div>
             </div>
-
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span 
-                  className="font-semibold text-gray-900 cursor-pointer hover:text-gray-700"
-                  onClick={() => setEditingProfile(true)}
-                >
-                  {currentProfile.username}
-                </span>
-                <button
-                  onClick={() => setEditingProfile(true)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="text-sm text-gray-900 mb-2">
-                {currentProfile.fullName}
-              </div>
-              <div className="flex gap-4 text-sm">
-                <span>
-                  <strong className="text-gray-900">
-                    {currentProfile.stats.posts === 'auto' ? filteredPosts.length : currentProfile.stats.posts}
-                  </strong>{' '}
-                  publications
-                </span>
-                <span 
-                  className="cursor-pointer text-gray-900 hover:text-gray-700"
-                  onClick={() => setEditingProfile(true)}
-                >
-                  <strong>{currentProfile.stats.followers}</strong> abonnés
-                </span>
-                <span 
-                  className="cursor-pointer text-gray-900 hover:text-gray-700"
-                  onClick={() => setEditingProfile(true)}
-                >
-                  <strong>{currentProfile.stats.following}</strong> suivi(e)s
-                </span>
-              </div>
+            <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Edit3 size={16} className="text-white" />
             </div>
           </div>
 
-          {currentProfile.bio && (
-            <div 
-              className="mt-3 text-sm whitespace-pre-line cursor-pointer hover:text-gray-700"
-              onClick={() => setEditingProfile(true)}
-            >
-              {currentProfile.bio}
+          <div className="flex-1">
+            <div className="flex items-center space-x-4 mb-2">
+              <div className="text-center">
+                <div className="font-semibold text-gray-900">{currentProfile.posts}</div>
+                <div className="text-xs text-gray-500">publications</div>
+              </div>
+              <div 
+                className="text-center cursor-pointer hover:bg-gray-50 px-2 py-1 rounded transition-colors"
+                onClick={() => setIsProfileEdit(true)}
+              >
+                <div className="font-semibold text-gray-900">{currentProfile.followers}</div>
+                <div className="text-xs text-gray-500">abonnés</div>
+              </div>
+              <div 
+                className="text-center cursor-pointer hover:bg-gray-50 px-2 py-1 rounded transition-colors"
+                onClick={() => setIsProfileEdit(true)}
+              >
+                <div className="font-semibold text-gray-900">{currentProfile.following}</div>
+                <div className="text-xs text-gray-500">suivi(e)s</div>
+              </div>
             </div>
-          )}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div 
+            className="font-semibold mb-1 cursor-pointer hover:text-blue-600 transition-colors"
+            onClick={() => setIsProfileEdit(true)}
+          >
+            {currentProfile.fullName}
+          </div>
+          <div className="text-sm whitespace-pre-line text-gray-700">
+            {currentProfile.bio}
+          </div>
+        </div>
+      </div>
+
+      {/* Onglets comptes */}
+      {accounts.length > 1 && (
+        <div className="flex space-x-1 px-4 mb-4 overflow-x-auto">
+          {accounts.map((account) => (
+            <button
+              key={account}
+              onClick={() => setActiveAccount(account)}
+              className={`px-3 py-1 text-sm rounded-full whitespace-nowrap transition-colors ${
+                activeAccount === account
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {account}
+              <span className="ml-1 text-xs opacity-75">
+                ({posts.filter(p => p.account === account).length})
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Status de connexion */}
+      {connectionStatus && (
+        <div className="px-4 mb-4">
+          <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+            {connectionStatus}
+          </div>
+        </div>
+      )}
+
+      {/* Grille d'images 3x4 */}
+      <div className="grid grid-cols-3 gap-1 p-4">
+        {gridItems.map((post, index) => (
+          <div
+            key={post?.id || `empty-${index}`}
+            className={`relative bg-gray-100 transition-all ${
+              dragOverIndex === index ? 'bg-blue-100 scale-105' : ''
+            }`}
+            style={{ aspectRatio: '1080/1350' }}
+            onDragOver={(e) => handleDragOver(e, index)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, index)}
+          >
+            {post ? (
+              <div
+                className="w-full h-full cursor-pointer group relative"
+                draggable={true}
+                onDragStart={(e) => handleDragStart(e, post, index)}
+                onClick={() => {
+                  setSelectedPost(post);
+                  setModalOpen(true);
+                }}
+              >
+                <MediaDisplay urls={post.urls} type={post.type} />
+                
+                {/* Hover overlay très discret */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="text-white text-xs p-1 text-center truncate">
+                    {post.title}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                Vide
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Configuration Modal */}
+      {isConfigOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Configuration Notion</h3>
+              <button onClick={() => setIsConfigOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Clé API Notion
+                </label>
+                <input
+                  type="text"
+                  value={notionApiKey}
+                  onChange={(e) => setNotionApiKey(e.target.value)}
+                  placeholder="ntn_..."
+                  className="w-full p-2 border rounded"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Format: ntn_abc123... (nouveau format Notion)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  ID de la base de données
+                </label>
+                <input
+                  type="text"
+                  value={databaseId}
+                  onChange={(e) => setDatabaseId(e.target.value)}
+                  placeholder="32 caractères"
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <button
+                onClick={connectToNotion}
+                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+              >
+                Connecter à Notion
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Edition du profil */}
-      {editingProfile && currentProfile && (
-        <div className="border-b bg-gray-50 p-4 space-y-3">
-          <h3 className="font-medium text-gray-800 mb-3">Modifier le profil - {activeAccount}</h3>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nom d'utilisateur
-            </label>
-            <input
-              type="text"
-              value={currentProfile.username}
-              onChange={(e) => setProfiles(prev => ({ 
-                ...prev, 
-                [activeAccount]: { ...prev[activeAccount], username: e.target.value }
-              }))}
-              className="w-full p-2 border rounded text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nom complet
-            </label>
-            <input
-              type="text"
-              value={currentProfile.fullName}
-              onChange={(e) => setProfiles(prev => ({ 
-                ...prev, 
-                [activeAccount]: { ...prev[activeAccount], fullName: e.target.value }
-              }))}
-              className="w-full p-2 border rounded text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Bio
-            </label>
-            <textarea
-              value={currentProfile.bio}
-              onChange={(e) => setProfiles(prev => ({ 
-                ...prev, 
-                [activeAccount]: { ...prev[activeAccount], bio: e.target.value }
-              }))}
-              className="w-full p-2 border rounded text-sm h-20 resize-none"
-              placeholder="Votre bio..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Photo de profil (URL)
-            </label>
-            <input
-              type="url"
-              value={currentProfile.profilePhoto}
-              onChange={(e) => setProfiles(prev => ({ 
-                ...prev, 
-                [activeAccount]: { ...prev[activeAccount], profilePhoto: e.target.value }
-              }))}
-              placeholder="https://exemple.com/photo.jpg"
-              className="w-full p-2 border rounded text-sm"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Abonnés
-              </label>
-              <input
-                type="text"
-                value={currentProfile.stats.followers}
-                onChange={(e) => setProfiles(prev => ({ 
-                  ...prev, 
-                  [activeAccount]: { 
-                    ...prev[activeAccount], 
-                    stats: { ...prev[activeAccount].stats, followers: e.target.value }
-                  }
-                }))}
-                placeholder="1,234"
-                className="w-full p-2 border rounded text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Suivi(e)s
-              </label>
-              <input
-                type="text"
-                value={currentProfile.stats.following}
-                onChange={(e) => setProfiles(prev => ({ 
-                  ...prev, 
-                  [activeAccount]: { 
-                    ...prev[activeAccount], 
-                    stats: { ...prev[activeAccount].stats, following: e.target.value }
-                  }
-                }))}
-                placeholder="567"
-                className="w-full p-2 border rounded text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={saveProfile}
-              className="flex-1 bg-blue-500 text-white py-2 px-4 rounded text-sm hover:bg-blue-600"
-            >
-              Sauvegarder
-            </button>
-            <button
-              onClick={() => setEditingProfile(false)}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Configuration Notion - SEULEMENT si pas connecté */}
-      {showSettings && !connectionStatus.includes('✅') && (
-        <div className="border-b bg-gray-50 p-4 space-y-4">
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <h3 className="font-medium text-blue-800 mb-2">Configuration Notion</h3>
-            <p className="text-sm text-blue-700 mb-3">
-              Clé API format : <code className="bg-blue-100 px-1 rounded">ntn_...</code> 
-              <br />
-              <a href="https://notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                Créer une intégration →
-              </a>
-            </p>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Clé API Notion
-                </label>
-                <input
-                  type="password"
-                  value={notionConfig.apiKey}
-                  onChange={(e) => setNotionConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                  placeholder="ntn_abc123..."
-                  className="w-full p-2 border rounded text-sm"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ID de la base (32 caractères)
-                </label>
-                <input
-                  type="text"
-                  value={notionConfig.databaseId}
-                  onChange={(e) => setNotionConfig(prev => ({ ...prev, databaseId: e.target.value }))}
-                  placeholder="abc123def456..."
-                  className="w-full p-2 border rounded text-sm"
-                />
-              </div>
-              
-              <button
-                onClick={connectToNotion}
-                disabled={isLoading}
-                className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:opacity-50"
-              >
-                {isLoading ? 'Connexion...' : 'Connecter à Notion'}
+      {isProfileEdit && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Modifier le profil</h3>
+              <button onClick={() => setIsProfileEdit(false)}>
+                <X size={20} />
               </button>
             </div>
+
+            <ProfileEditForm
+              profile={currentProfile}
+              onSave={(profileData) => {
+                saveProfile(activeAccount, profileData);
+                setIsProfileEdit(false);
+              }}
+              onCancel={() => setIsProfileEdit(false)}
+            />
           </div>
         </div>
       )}
 
-      {/* Status */}
-      <div className="px-4 py-2 bg-gray-50 text-sm text-gray-600 border-b flex items-center justify-between">
-        <span>{connectionStatus}</span>
-        {connectionStatus.includes('❌') && (
-          <WifiOff className="w-4 h-4 text-red-500" />
-        )}
-        {connectionStatus.includes('✅') && (
-          <Wifi className="w-4 h-4 text-green-500" />
-        )}
-      </div>
-
-      {/* Onglets des comptes - SEULEMENT les comptes détectés */}
-      {accounts.length > 1 && (
-        <div className="border-b">
-          <div className="flex overflow-x-auto">
-            {accounts.map(account => (
-              <button
-                key={account}
-                onClick={() => setActiveAccount(account)}
-                className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 ${
-                  activeAccount === account
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {account}
-                <span className="ml-2 text-xs bg-gray-200 px-2 py-1 rounded-full">
-                  {posts.filter(p => p.account === account).length}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Grille de posts */}
-      <div className="p-1">
-        <div className="grid grid-cols-3 gap-1">
-          {Array.from({ length: 12 }).map((_, index) => {
-            const post = filteredPosts[index];
-            
-            if (post) {
-              return (
-                <div
-                  key={`post-${index}`}
-                  className="aspect-[1080/1350] bg-gray-100 relative"
-                >
-                  <MediaDisplay
-                    urls={post.urls}
-                    type={post.type}
-                    index={index}
-                    onClick={() => openModal(post)}
-                    caption={post.caption}
-                    title={post.title}
-                  />
-                </div>
-              );
-            }
-
-            return (
-              <div
-                key={`empty-${index}`}
-                className="aspect-[1080/1350] bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center"
-              >
-                <span className="text-gray-400 text-xs">Post {index + 1}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Message d'aide si pas de posts */}
-      {filteredPosts.length === 0 && !isLoading && activeAccount && (
-        <div className="p-8 text-center text-gray-500">
-          <Camera className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-          <p className="text-sm mb-2">Aucun post trouvé pour {activeAccount}</p>
-          <p className="text-xs">
-            Ajoutez des images avec le tag "{activeAccount}" dans votre base Notion
-          </p>
-        </div>
-      )}
-
-      {/* Filigrane en bas */}
-      <div className="w-full flex justify-center py-2 bg-gray-50 border-t">
-        <a 
-          href="https://www.instagram.com/freelance.creatif/" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          Créé par @Freelancecreatif
-        </a>
-      </div>
-
-      {/* Modal plein écran */}
-      {selectedPost && (
-        <PostModal
-          post={selectedPost}
-          onClose={closeModal}
-          onPrevious={() => navigatePost('previous')}
-          onNext={() => navigatePost('next')}
-          hasPrevious={filteredPosts.length > 1}
-          hasNext={filteredPosts.length > 1}
-        />
-      )}
-
-      {/* Modal d'erreur */}
-      <ErrorDisplay 
-        error={error}
-        onClose={() => setError(null)}
-        onRetry={connectToNotion}
+      {/* Modal d'affichage détaillé */}
+      <PostModal
+        post={selectedPost}
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedPost(null);
+        }}
+        onNavigate={(direction) => {
+          const currentIndex = filteredPosts.findIndex(p => p.id === selectedPost.id);
+          let newIndex;
+          if (direction === 'next') {
+            newIndex = currentIndex < filteredPosts.length - 1 ? currentIndex + 1 : 0;
+          } else {
+            newIndex = currentIndex > 0 ? currentIndex - 1 : filteredPosts.length - 1;
+          }
+          setSelectedPost(filteredPosts[newIndex]);
+        }}
       />
+
+      {/* Filigrane discret en bas */}
+      <div className="border-t bg-gray-50 py-2">
+        <div className="text-center">
+          <a
+            href="https://www.instagram.com/freelance.creatif/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            Créé par @Freelancecreatif
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Composant pour éditer le profil
+const ProfileEditForm = ({ profile, onSave, onCancel }) => {
+  const [formData, setFormData] = useState(profile);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1">Nom d'utilisateur</label>
+        <input
+          type="text"
+          value={formData.username}
+          onChange={(e) => setFormData({...formData, username: e.target.value})}
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Nom complet</label>
+        <input
+          type="text"
+          value={formData.fullName}
+          onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Bio</label>
+        <textarea
+          value={formData.bio}
+          onChange={(e) => setFormData({...formData, bio: e.target.value})}
+          rows={3}
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Photo de profil (URL)</label>
+        <input
+          type="url"
+          value={formData.profilePhoto}
+          onChange={(e) => setFormData({...formData, profilePhoto: e.target.value})}
+          placeholder="https://..."
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Publications</label>
+          <input
+            type="text"
+            value={formData.posts}
+            onChange={(e) => setFormData({...formData, posts: e.target.value})}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Abonnés</label>
+          <input
+            type="text"
+            value={formData.followers}
+            onChange={(e) => setFormData({...formData, followers: e.target.value})}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Suivi(e)s</label>
+          <input
+            type="text"
+            value={formData.following}
+            onChange={(e) => setFormData({...formData, following: e.target.value})}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+      </div>
+
+      <div className="flex space-x-3">
+        <button
+          onClick={() => onSave(formData)}
+          className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+        >
+          Sauvegarder
+        </button>
+        <button
+          onClick={onCancel}
+          className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
+        >
+          Annuler
+        </button>
+      </div>
     </div>
   );
 };
