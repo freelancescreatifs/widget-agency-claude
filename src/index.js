@@ -1,0 +1,18 @@
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+// Point d'entrée principal de l'application React
+const root = ReactDOM.createRoot(document.getElementById('root'));
+
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// Performance monitoring (optionnel)
+if (typeof window !== 'undefined' && window.performance) {
+  console.log('Widget Instagram chargé en:', window.performance.now(), 'ms');
+}
