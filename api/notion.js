@@ -1,6 +1,6 @@
-// API Notion en syntaxe CommonJS pour Vercel
-module.exports = async function handler(req, res) {
-  // Headers CORS basiques
+// API Notion moderne en ESM pour Vercel
+export default async function handler(req, res) {
+  // Headers CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -10,18 +10,19 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Test endpoint pour GET - toujours répondre
+  // Test endpoint pour GET
   if (req.method === 'GET') {
     return res.status(200).json({
       status: 'OK',
       message: 'API Notion active',
       timestamp: new Date().toISOString(),
-      version: '3.1-commonjs',
-      build: 'success'
+      version: '4.0-esm',
+      build: 'success',
+      method: 'GET'
     });
   }
 
-  // Seulement POST pour les requêtes Notion
+  // POST pour Notion
   if (req.method !== 'POST') {
     return res.status(405).json({ 
       success: false,
@@ -34,13 +35,13 @@ module.exports = async function handler(req, res) {
     const body = req.body || {};
     const { apiKey, databaseId } = body;
 
-    console.log('📡 Received request:', { 
+    console.log('📡 API Request received:', { 
       hasApiKey: !!apiKey, 
       hasDatabaseId: !!databaseId,
-      method: req.method 
+      timestamp: new Date().toISOString()
     });
 
-    // Validation basique
+    // Validation
     if (!apiKey) {
       return res.status(400).json({
         success: false,
@@ -52,7 +53,7 @@ module.exports = async function handler(req, res) {
     if (!databaseId) {
       return res.status(400).json({
         success: false,
-        error: 'ID de base manquant',
+        error: 'ID de base manquant', 
         code: 'MISSING_DATABASE_ID'
       });
     }
@@ -62,8 +63,7 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({
         success: false,
         error: 'Format de clé invalide (doit commencer par ntn_)',
-        code: 'INVALID_API_KEY',
-        received_format: apiKey.substring(0, 6) + '...'
+        code: 'INVALID_API_KEY'
       });
     }
 
@@ -71,17 +71,13 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({
         success: false,
         error: 'ID de base invalide (doit faire 32 caractères)',
-        code: 'INVALID_DATABASE_ID',
-        received_length: databaseId.length
+        code: 'INVALID_DATABASE_ID'
       });
     }
 
-    console.log('✅ Validation passed, calling Notion API...');
+    console.log('✅ Validation OK, calling Notion...');
 
-    // Import dynamique de fetch pour Node.js si nécessaire
-    const fetch = global.fetch || (await import('node-fetch')).default;
-
-    // Appel Notion avec fetch simple
+    // Appel Notion
     const notionUrl = `https://api.notion.com/v1/databases/${databaseId}/query`;
     
     const notionResponse = await fetch(notionUrl, {
@@ -96,70 +92,56 @@ module.exports = async function handler(req, res) {
       })
     });
 
-    console.log('📊 Notion response status:', notionResponse.status);
+    console.log('📊 Notion status:', notionResponse.status);
 
-    // Lire la réponse
-    let notionData;
-    try {
-      const responseText = await notionResponse.text();
-      console.log('📄 Response length:', responseText.length);
-      notionData = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('❌ Parse error:', parseError.message);
-      return res.status(500).json({
-        success: false,
-        error: 'Réponse Notion invalide',
-        code: 'NOTION_PARSE_ERROR',
-        details: parseError.message
-      });
-    }
-
-    // Vérifier si la requête Notion a réussi
     if (!notionResponse.ok) {
-      console.error('❌ Notion error:', notionData);
+      const errorText = await notionResponse.text();
+      console.error('❌ Notion error:', errorText);
+      
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText };
+      }
+
       return res.status(notionResponse.status).json({
         success: false,
-        error: notionData.message || 'Erreur Notion',
+        error: 'Erreur Notion',
         code: 'NOTION_ERROR',
-        notion_error: notionData
+        notion_error: errorData
       });
     }
 
-    // Traitement des données
+    // Parse response
+    const notionData = await notionResponse.json();
     const results = notionData.results || [];
-    console.log('📋 Found rows:', results.length);
-
-    // Extraction simple des posts
-    const posts = [];
-    let processedCount = 0;
     
-    for (let i = 0; i < results.length && posts.length < 20; i++) {
+    console.log('📋 Rows found:', results.length);
+
+    // Process posts
+    const posts = [];
+    
+    for (const row of results) {
       try {
-        const row = results[i];
         const props = row.properties || {};
         
-        // Chercher la colonne de contenu
+        // Find content property
         let contentProperty = null;
-        const contentKeys = ['Contenu', 'Content', 'Media', 'Fichiers', 'Files'];
-        
-        for (const key of contentKeys) {
-          if (props[key] && props[key].files && props[key].files.length > 0) {
-            contentProperty = props[key];
+        for (const [key, value] of Object.entries(props)) {
+          if (value.files && value.files.length > 0) {
+            contentProperty = value;
             break;
           }
         }
 
-        if (!contentProperty) {
-          continue;
-        }
+        if (!contentProperty) continue;
 
-        // Chercher le statut
+        // Check status
         let isPosted = false;
-        const statusKeys = ['Statut', 'Status', 'État', 'State'];
-        
-        for (const key of statusKeys) {
-          if (props[key] && props[key].select) {
-            const status = props[key].select.name.toLowerCase();
+        for (const [key, value] of Object.entries(props)) {
+          if (value.select && value.select.name) {
+            const status = value.select.name.toLowerCase();
             if (status === 'posté' || status === 'posted') {
               isPosted = true;
               break;
@@ -167,39 +149,34 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        if (isPosted) {
-          continue;
-        }
+        if (isPosted) continue;
 
-        // Extraire les données
+        // Extract data
         let title = 'Sans titre';
-        const titleKeys = Object.keys(props).filter(key => props[key].title);
-        if (titleKeys.length > 0) {
-          const titleProp = props[titleKeys[0]];
-          if (titleProp.title && titleProp.title[0]) {
-            title = titleProp.title[0].text.content || 'Sans titre';
+        for (const [key, value] of Object.entries(props)) {
+          if (value.title && value.title[0] && value.title[0].text) {
+            title = value.title[0].text.content;
+            break;
           }
         }
 
         let date = new Date().toISOString().split('T')[0];
-        const dateKeys = Object.keys(props).filter(key => props[key].date);
-        if (dateKeys.length > 0) {
-          const dateProp = props[dateKeys[0]];
-          if (dateProp.date && dateProp.date.start) {
-            date = dateProp.date.start;
+        for (const [key, value] of Object.entries(props)) {
+          if (value.date && value.date.start) {
+            date = value.date.start;
+            break;
           }
         }
 
         let caption = '';
-        const captionKeys = Object.keys(props).filter(key => props[key].rich_text);
-        if (captionKeys.length > 0) {
-          const captionProp = props[captionKeys[0]];
-          if (captionProp.rich_text && captionProp.rich_text[0]) {
-            caption = captionProp.rich_text[0].text.content || '';
+        for (const [key, value] of Object.entries(props)) {
+          if (value.rich_text && value.rich_text[0] && value.rich_text[0].text) {
+            caption = value.rich_text[0].text.content;
+            break;
           }
         }
 
-        // URLs des fichiers
+        // Extract URLs
         const urls = [];
         for (const file of contentProperty.files) {
           if (file.type === 'file' && file.file && file.file.url) {
@@ -209,15 +186,13 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        if (urls.length === 0) {
-          continue;
-        }
+        if (urls.length === 0) continue;
 
-        // Type automatique
+        // Determine type
         let type = 'Image';
         if (urls.length > 1) {
           type = 'Carrousel';
-        } else if (urls[0].includes('.mp4') || urls[0].includes('video') || urls[0].includes('.mov')) {
+        } else if (urls[0].match(/\.(mp4|mov|webm|avi)(\?|$)/i)) {
           type = 'Vidéo';
         }
 
@@ -231,41 +206,38 @@ module.exports = async function handler(req, res) {
           account: 'Principal'
         });
 
-        processedCount++;
+        if (posts.length >= 20) break;
 
-      } catch (postError) {
-        console.error('❌ Error processing post:', postError.message);
+      } catch (error) {
+        console.error('❌ Error processing row:', error.message);
         continue;
       }
     }
 
-    // Trier par date (plus récent en premier)
+    // Sort by date
     posts.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    console.log('✅ Successfully processed:', posts.length, 'posts from', results.length, 'rows');
+    console.log('✅ Processed posts:', posts.length);
 
-    // Réponse finale simple
     return res.status(200).json({
       success: true,
       posts: posts,
       meta: {
         total: results.length,
-        withMedia: posts.length,
-        processed: processedCount
+        withMedia: posts.length
       },
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('❌ Server error:', error.message);
-    console.error('❌ Stack:', error.stack);
+    console.error('❌ Server error:', error);
     
     return res.status(500).json({
       success: false,
-      error: 'Erreur serveur interne',
+      error: 'Erreur serveur',
       code: 'SERVER_ERROR',
       message: error.message,
       timestamp: new Date().toISOString()
     });
   }
-};
+}
