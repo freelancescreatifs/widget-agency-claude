@@ -1,46 +1,42 @@
 export default async function handler(req, res) {
-  // Configuration CORS stricte
+  // Headers CORS basiques
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Gestion OPTIONS pour CORS
+  // CORS preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Test endpoint pour GET
+  // Test endpoint pour GET - toujours répondre
   if (req.method === 'GET') {
     return res.status(200).json({
-      status: 'API Active',
-      version: '2.0',
+      status: 'OK',
+      message: 'API Notion active',
       timestamp: new Date().toISOString(),
-      endpoint: '/api/notion',
-      methods: ['POST'],
-      message: 'Use POST with apiKey and databaseId to query Notion'
+      version: '3.0'
     });
   }
 
-  // Seul POST est autorisé pour les requêtes Notion
+  // Seulement POST pour les requêtes Notion
   if (req.method !== 'POST') {
     return res.status(405).json({ 
-      error: 'Method not allowed',
-      allowed: ['POST'],
-      received: req.method
+      success: false,
+      error: 'Method not allowed' 
     });
   }
 
   try {
-    // Validation des paramètres d'entrée
-    const { apiKey, databaseId } = req.body || {};
+    const body = req.body || {};
+    const { apiKey, databaseId } = body;
 
-    // Vérification de base
+    // Validation basique
     if (!apiKey) {
       return res.status(400).json({
         success: false,
         error: 'Clé API manquante',
-        code: 'MISSING_API_KEY',
-        message: 'Le paramètre apiKey est requis'
+        code: 'MISSING_API_KEY'
       });
     }
 
@@ -48,40 +44,33 @@ export default async function handler(req, res) {
       return res.status(400).json({
         success: false,
         error: 'ID de base manquant',
-        code: 'MISSING_DATABASE_ID',
-        message: 'Le paramètre databaseId est requis'
+        code: 'MISSING_DATABASE_ID'
       });
     }
 
-    // Validation du format de la clé API
+    // Validation format
     if (!apiKey.startsWith('ntn_') && !apiKey.startsWith('secret_')) {
       return res.status(400).json({
         success: false,
-        error: 'Format de clé API invalide',
-        code: 'INVALID_API_KEY_FORMAT',
-        message: 'La clé doit commencer par "ntn_" ou "secret_"',
-        received: apiKey.substring(0, 10) + '...'
+        error: 'Format de clé invalide (doit commencer par ntn_)',
+        code: 'INVALID_API_KEY'
       });
     }
 
-    // Validation de l'ID de base
     if (databaseId.length !== 32) {
       return res.status(400).json({
         success: false,
-        error: 'ID de base invalide',
-        code: 'INVALID_DATABASE_ID',
-        message: 'L\'ID doit faire exactement 32 caractères',
-        received_length: databaseId.length
+        error: 'ID de base invalide (doit faire 32 caractères)',
+        code: 'INVALID_DATABASE_ID'
       });
     }
 
-    console.log('📡 Attempting Notion API call...');
+    console.log('📡 Calling Notion API...');
 
-    // Appel à l'API Notion avec timeout
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-    const notionResponse = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+    // Appel Notion avec fetch simple
+    const notionUrl = `https://api.notion.com/v1/databases/${databaseId}/query`;
+    
+    const notionResponse = await fetch(notionUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -89,208 +78,134 @@ export default async function handler(req, res) {
         'Notion-Version': '2022-06-28'
       },
       body: JSON.stringify({
-        page_size: 100
-      }),
-      signal: controller.signal
+        page_size: 50
+      })
     });
 
-    clearTimeout(timeout);
+    console.log('📊 Notion status:', notionResponse.status);
 
-    console.log('📊 Notion Response Status:', notionResponse.status);
-
-    // Lecture de la réponse
-    const responseText = await notionResponse.text();
-    console.log('📄 Response length:', responseText.length);
-
+    // Lire la réponse
     let notionData;
     try {
+      const responseText = await notionResponse.text();
       notionData = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('❌ JSON Parse Error:', parseError.message);
       return res.status(500).json({
         success: false,
         error: 'Réponse Notion invalide',
-        code: 'INVALID_JSON_RESPONSE',
-        message: 'Notion a renvoyé une réponse non-JSON',
-        debug: {
-          status: notionResponse.status,
-          responseStart: responseText.substring(0, 100)
-        }
+        code: 'NOTION_PARSE_ERROR'
       });
     }
 
-    // Gestion des erreurs Notion
+    // Vérifier si la requête Notion a réussi
     if (!notionResponse.ok) {
-      console.error('❌ Notion API Error:', notionData);
       return res.status(notionResponse.status).json({
         success: false,
-        error: 'Erreur API Notion',
-        code: 'NOTION_API_ERROR',
-        message: notionData.message || 'Erreur inconnue de Notion',
+        error: notionData.message || 'Erreur Notion',
+        code: 'NOTION_ERROR',
         notion_error: notionData
       });
     }
 
     // Traitement des données
     const results = notionData.results || [];
-    console.log('📋 Total rows found:', results.length);
+    console.log('📋 Found rows:', results.length);
 
-    // Détection des propriétés
-    const properties = results.length > 0 ? Object.keys(results[0].properties) : [];
-    console.log('🏷️ Properties found:', properties);
-
-    // Mapping des colonnes
-    const propertyMap = {
-      title: properties.find(p => 
-        ['titre', 'title', 'nom', 'name'].includes(p.toLowerCase())
-      ),
-      content: properties.find(p => 
-        ['contenu', 'content', 'media', 'fichiers', 'files'].includes(p.toLowerCase())
-      ),
-      date: properties.find(p => 
-        ['date', 'publication', 'publish'].includes(p.toLowerCase())
-      ),
-      type: properties.find(p => 
-        ['type', 'category', 'catégorie'].includes(p.toLowerCase())
-      ),
-      caption: properties.find(p => 
-        ['caption', 'description', 'texte', 'text'].includes(p.toLowerCase())
-      ),
-      status: properties.find(p => 
-        ['statut', 'status', 'état', 'state'].includes(p.toLowerCase())
-      ),
-      account: properties.find(p => 
-        ['compte', 'account', 'profil', 'profile'].includes(p.toLowerCase())
-      )
-    };
-
-    console.log('🗂️ Property mapping:', propertyMap);
-
-    // Filtrage et traitement des posts
-    const validPosts = [];
+    // Extraction simple des posts
+    const posts = [];
     
-    for (const row of results) {
-      try {
-        const props = row.properties;
-        
-        // Vérifier le contenu média
-        const contentProp = propertyMap.content ? props[propertyMap.content] : null;
-        if (!contentProp || !contentProp.files || contentProp.files.length === 0) {
-          continue; // Passer si pas de média
+    for (let i = 0; i < results.length && posts.length < 20; i++) {
+      const row = results[i];
+      const props = row.properties || {};
+      
+      // Chercher la colonne de contenu
+      let contentProperty = null;
+      const contentKeys = ['Contenu', 'Content', 'Media', 'Fichiers'];
+      for (const key of contentKeys) {
+        if (props[key] && props[key].files && props[key].files.length > 0) {
+          contentProperty = props[key];
+          break;
         }
-
-        // Vérifier le statut (exclure "Posté")
-        const statusProp = propertyMap.status ? props[propertyMap.status] : null;
-        if (statusProp && statusProp.select && 
-            ['posté', 'posted'].includes(statusProp.select.name.toLowerCase())) {
-          continue; // Passer si posté
-        }
-
-        // Extraire les données
-        const title = propertyMap.title && props[propertyMap.title] 
-          ? (props[propertyMap.title].title?.[0]?.text?.content || 'Sans titre')
-          : 'Sans titre';
-
-        const date = propertyMap.date && props[propertyMap.date] 
-          ? props[propertyMap.date].date?.start
-          : new Date().toISOString().split('T')[0];
-
-        const caption = propertyMap.caption && props[propertyMap.caption]
-          ? (props[propertyMap.caption].rich_text?.[0]?.text?.content || '')
-          : '';
-
-        const account = propertyMap.account && props[propertyMap.account]
-          ? (props[propertyMap.account].select?.name || 'Principal')
-          : 'Principal';
-
-        // Traiter les fichiers média
-        const mediaUrls = contentProp.files.map(file => {
-          if (file.type === 'file') {
-            return file.file.url;
-          } else if (file.type === 'external') {
-            return file.external.url;
-          }
-          return null;
-        }).filter(Boolean);
-
-        if (mediaUrls.length === 0) continue;
-
-        // Déterminer le type
-        let type = 'Image';
-        if (mediaUrls.length > 1) {
-          type = 'Carrousel';
-        } else if (mediaUrls[0].includes('.mp4') || mediaUrls[0].includes('video')) {
-          type = 'Vidéo';
-        }
-
-        // Type personnalisé si défini
-        if (propertyMap.type && props[propertyMap.type]?.select?.name) {
-          type = props[propertyMap.type].select.name;
-        }
-
-        validPosts.push({
-          id: row.id,
-          title,
-          date,
-          caption,
-          account,
-          type,
-          urls: mediaUrls,
-          created_time: row.created_time
-        });
-
-      } catch (postError) {
-        console.error('❌ Error processing post:', postError.message);
-        continue; // Continuer avec le post suivant
       }
+
+      if (!contentProperty) continue;
+
+      // Chercher le statut
+      let isPosted = false;
+      const statusKeys = ['Statut', 'Status', 'État', 'State'];
+      for (const key of statusKeys) {
+        if (props[key] && props[key].select) {
+          const status = props[key].select.name.toLowerCase();
+          if (status === 'posté' || status === 'posted') {
+            isPosted = true;
+            break;
+          }
+        }
+      }
+
+      if (isPosted) continue;
+
+      // Extraire les données
+      const title = Object.keys(props).find(key => props[key].title) 
+        ? (props[Object.keys(props).find(key => props[key].title)].title[0]?.text?.content || 'Sans titre')
+        : `Post ${i + 1}`;
+
+      const date = Object.keys(props).find(key => props[key].date)
+        ? props[Object.keys(props).find(key => props[key].date)].date?.start
+        : new Date().toISOString().split('T')[0];
+
+      const caption = Object.keys(props).find(key => props[key].rich_text)
+        ? (props[Object.keys(props).find(key => props[key].rich_text)].rich_text[0]?.text?.content || '')
+        : '';
+
+      // URLs des fichiers
+      const urls = contentProperty.files.map(file => {
+        if (file.type === 'file') return file.file.url;
+        if (file.type === 'external') return file.external.url;
+        return null;
+      }).filter(Boolean);
+
+      if (urls.length === 0) continue;
+
+      // Type automatique
+      let type = 'Image';
+      if (urls.length > 1) type = 'Carrousel';
+      else if (urls[0].includes('.mp4') || urls[0].includes('video')) type = 'Vidéo';
+
+      posts.push({
+        id: row.id,
+        title,
+        date,
+        caption,
+        type,
+        urls,
+        account: 'Principal'
+      });
     }
 
-    // Trier par date (plus récent en premier)
-    validPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Trier par date
+    posts.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    console.log('✅ Successfully processed:', validPosts.length, 'posts');
+    console.log('✅ Processed posts:', posts.length);
 
-    // Réponse finale
+    // Réponse finale simple
     return res.status(200).json({
       success: true,
-      posts: validPosts,
+      posts: posts,
       meta: {
         total: results.length,
-        withMedia: validPosts.length,
-        properties: properties,
-        propertyMap: propertyMap
-      },
-      timestamp: new Date().toISOString()
+        withMedia: posts.length
+      }
     });
 
   } catch (error) {
-    console.error('❌ Server Error:', error);
+    console.error('❌ Error:', error.message);
     
-    // Gestion des différents types d'erreurs
-    if (error.name === 'AbortError') {
-      return res.status(408).json({
-        success: false,
-        error: 'Timeout de connexion',
-        code: 'REQUEST_TIMEOUT',
-        message: 'La requête à Notion a pris trop de temps'
-      });
-    }
-
-    if (error.message.includes('fetch')) {
-      return res.status(502).json({
-        success: false,
-        error: 'Erreur de connexion à Notion',
-        code: 'NOTION_CONNECTION_ERROR',
-        message: 'Impossible de contacter l\'API Notion'
-      });
-    }
-
     return res.status(500).json({
       success: false,
-      error: 'Erreur serveur interne',
-      code: 'INTERNAL_SERVER_ERROR',
-      message: error.message,
-      timestamp: new Date().toISOString()
+      error: 'Erreur serveur',
+      code: 'SERVER_ERROR',
+      message: error.message
     });
   }
 }
