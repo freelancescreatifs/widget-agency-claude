@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       status: "OK",
       message: "API Notion active",
-      version: "5.0"
+      version: "6.0-native-fetch"
     });
     return;
   }
@@ -47,9 +47,6 @@ module.exports = async function handler(req, res) {
       });
       return;
     }
-
-    // Import dynamique de fetch pour Node.js
-    const fetch = (await import('node-fetch')).default;
 
     // Action de mise à jour d'un post
     if (action === 'updatePost' && postId && newDate) {
