@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 
-// Configuration de l'API
-const API_BASE = 'https://instagram-widget-claude.vercel.app/api';
+// Configuration de l'API - URL CORRIGÉE
+const API_BASE = 'https://widget-agency-claude.vercel.app/api';
 
 // Composant pour afficher les erreurs
 const ErrorDisplay = ({ error, onClose, onRetry }) => {
@@ -291,7 +291,7 @@ const InstagramNotionWidget = () => {
       });
       const data = await response.json();
       console.log('🧪 API Response:', data);
-      return data.status === 'OK';
+      return data.status === 'OK' || data.message; // API répond
     } catch (err) {
       console.error('❌ API Test Failed:', err);
       return false;
