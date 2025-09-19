@@ -11,7 +11,7 @@ const MediaDisplay = ({ urls, type, caption }) => {
   if (!urls || urls.length === 0) {
     return (
       <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-        <span className="text-gray-500">Pas de média</span>
+        <span className="text-gray-500 text-xs">Pas de média</span>
       </div>
     );
   }
@@ -25,6 +25,7 @@ const MediaDisplay = ({ urls, type, caption }) => {
 
   return (
     <div className="relative w-full h-full group">
+      {/* Media principal */}
       {isCurrentVideo ? (
         <video
           src={currentUrl}
@@ -46,10 +47,10 @@ const MediaDisplay = ({ urls, type, caption }) => {
         />
       )}
 
-      {/* Icônes type de contenu */}
+      {/* Icônes en haut à droite */}
       {urls.length > 1 && (
-        <div className="absolute top-2 right-2 text-white drop-shadow-md">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="absolute top-2 right-2 text-white drop-shadow-lg z-10">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <rect x="3" y="3" width="6" height="18"/>
             <rect x="9" y="3" width="6" height="18"/>
             <rect x="15" y="3" width="6" height="18"/>
@@ -58,12 +59,12 @@ const MediaDisplay = ({ urls, type, caption }) => {
       )}
       
       {isCurrentVideo && (
-        <div className="absolute top-2 right-2 text-white drop-shadow-md">
-          <Play size={16} fill="currentColor" />
+        <div className="absolute top-2 right-2 text-white drop-shadow-lg z-10">
+          <Play size={16} fill="white" stroke="white" />
         </div>
       )}
 
-      {/* Navigation carrousel */}
+      {/* Navigation carrousel - Flèches BIEN POSITIONNÉES */}
       {urls.length > 1 && (
         <>
           <button
@@ -71,9 +72,10 @@ const MediaDisplay = ({ urls, type, caption }) => {
               e.stopPropagation();
               setCurrentIndex(prev => prev > 0 ? prev - 1 : urls.length - 1);
             }}
-            className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute left-1 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-70 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10"
+            style={{ width: '28px', height: '28px' }}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={16} className="mx-auto" />
           </button>
           
           <button
@@ -81,13 +83,14 @@ const MediaDisplay = ({ urls, type, caption }) => {
               e.stopPropagation();
               setCurrentIndex(prev => prev < urls.length - 1 ? prev + 1 : 0);
             }}
-            className="absolute right-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute right-1 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-70 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10"
+            style={{ width: '28px', height: '28px' }}
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={16} className="mx-auto" />
           </button>
 
           {/* Points de navigation */}
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-1">
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-1.5 z-10">
             {urls.map((_, index) => (
               <button
                 key={index}
@@ -95,8 +98,8 @@ const MediaDisplay = ({ urls, type, caption }) => {
                   e.stopPropagation();
                   setCurrentIndex(index);
                 }}
-                className={`w-1.5 h-1.5 rounded-full ${
-                  index === currentIndex ? 'bg-white' : 'bg-white bg-opacity-50'
+                className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                  index === currentIndex ? 'bg-white' : 'bg-white bg-opacity-60'
                 }`}
               />
             ))}
@@ -104,9 +107,9 @@ const MediaDisplay = ({ urls, type, caption }) => {
         </>
       )}
 
-      {/* Overlay en bande avec caption */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="truncate">
+      {/* Overlay SEULEMENT en bas avec caption */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ height: '40px' }}>
+        <div className="absolute bottom-1 left-2 right-2 text-white text-xs font-medium truncate">
           {caption || 'Cliquer pour voir en détail'}
         </div>
       </div>
@@ -114,7 +117,7 @@ const MediaDisplay = ({ urls, type, caption }) => {
   );
 };
 
-// Composant Modal pour affichage détaillé
+// Composant Modal détaillée
 const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -123,12 +126,18 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
   const urls = post.urls || [];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-50" 
+      onClick={onClose}
+    >
+      <div 
+        className="relative max-w-2xl max-h-[90vh] w-full h-full flex items-center justify-center" 
+        onClick={e => e.stopPropagation()}
+      >
         {/* Bouton fermer */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+          className="absolute top-4 right-4 text-white hover:text-gray-300 z-20 bg-black bg-opacity-50 rounded-full p-2"
         >
           <X size={24} />
         </button>
@@ -138,28 +147,28 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
           <>
             <button
               onClick={() => onNavigate('prev')}
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-10"
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-20 bg-black bg-opacity-50 rounded-full p-2"
             >
               <ChevronLeft size={32} />
             </button>
             <button
               onClick={() => onNavigate('next')}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-10"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 z-20 bg-black bg-opacity-50 rounded-full p-2"
             >
               <ChevronRight size={32} />
             </button>
           </>
         )}
 
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center max-w-lg">
           {/* Média principal */}
-          <div className="relative">
+          <div className="relative bg-black rounded-lg overflow-hidden">
             {urls[currentIndex] && (
               <>
                 {post.type === 'Vidéo' ? (
                   <video
                     src={urls[currentIndex]}
-                    className="max-w-md max-h-[70vh] object-contain"
+                    className="max-w-sm max-h-[60vh] object-contain"
                     controls
                     autoPlay
                   />
@@ -167,7 +176,7 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
                   <img
                     src={urls[currentIndex]}
                     alt={post.title}
-                    className="max-w-md max-h-[70vh] object-contain"
+                    className="max-w-sm max-h-[60vh] object-contain"
                   />
                 )}
 
@@ -176,13 +185,13 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
                   <>
                     <button
                       onClick={() => setCurrentIndex(prev => prev > 0 ? prev - 1 : urls.length - 1)}
-                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2"
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-70 text-white rounded-full p-2"
                     >
                       <ChevronLeft size={20} />
                     </button>
                     <button
                       onClick={() => setCurrentIndex(prev => prev < urls.length - 1 ? prev + 1 : 0)}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-70 text-white rounded-full p-2"
                     >
                       <ChevronRight size={20} />
                     </button>
@@ -192,7 +201,7 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
                         <button
                           key={index}
                           onClick={() => setCurrentIndex(index)}
-                          className={`w-2 h-2 rounded-full ${
+                          className={`w-2.5 h-2.5 rounded-full ${
                             index === currentIndex ? 'bg-white' : 'bg-white bg-opacity-50'
                           }`}
                         />
@@ -205,12 +214,16 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
           </div>
 
           {/* Informations du post */}
-          <div className="text-white text-center mt-4 max-w-md">
+          <div className="text-white text-center mt-6 px-4">
             <h3 className="text-lg font-semibold mb-2">{post.title}</h3>
-            {post.caption && <p className="text-sm text-gray-300 mb-2">{post.caption}</p>}
-            <p className="text-xs text-gray-400">
-              {post.date && new Date(post.date).toLocaleDateString('fr-FR')}
-            </p>
+            {post.caption && (
+              <p className="text-sm text-gray-300 mb-3 leading-relaxed">{post.caption}</p>
+            )}
+            <div className="text-xs text-gray-400 space-y-1">
+              <p>📅 {post.date && new Date(post.date).toLocaleDateString('fr-FR')}</p>
+              <p>📷 {post.type} {urls.length > 1 && `(${urls.length} médias)`}</p>
+              {post.account && <p>👤 {post.account}</p>}
+            </div>
           </div>
         </div>
       </div>
@@ -220,6 +233,7 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
 
 // Composant principal
 const InstagramNotionWidget = () => {
+  // États de base
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isProfileEdit, setIsProfileEdit] = useState(false);
   const [notionApiKey, setNotionApiKey] = useState('');
@@ -228,10 +242,12 @@ const InstagramNotionWidget = () => {
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [draggedPost, setDraggedPost] = useState(null);
+
+  // États pour le drag & drop
+  const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
-  // Gestion multi-comptes
+  // États pour multi-comptes
   const [accounts, setAccounts] = useState(['All']);
   const [activeAccount, setActiveAccount] = useState('All');
   const [isAccountManager, setIsAccountManager] = useState(false);
@@ -241,19 +257,13 @@ const InstagramNotionWidget = () => {
   const [profiles, setProfiles] = useState({
     'All': {
       username: 'mon_compte',
-      fullName: 'Mon Compte',
+      fullName: 'Mon Compte Principal',
       bio: '🚀 Créateur de contenu\n📸 Planning Instagram\n📍 Paris, France',
       profilePhoto: '',
-      posts: '0',
       followers: '1,234',
       following: '567'
     }
   });
-
-  // Obtenir le profil du compte actif
-  const getProfile = (account) => {
-    return profiles[account] || profiles['All'];
-  };
 
   // Charger les données au démarrage
   useEffect(() => {
@@ -264,6 +274,7 @@ const InstagramNotionWidget = () => {
     
     if (savedApiKey) setNotionApiKey(savedApiKey);
     if (savedDbId) setDatabaseId(savedDbId);
+    
     if (savedProfiles) {
       try {
         setProfiles(JSON.parse(savedProfiles));
@@ -271,6 +282,7 @@ const InstagramNotionWidget = () => {
         console.error('Erreur parsing profiles:', e);
       }
     }
+    
     if (savedAccounts) {
       try {
         const accounts = JSON.parse(savedAccounts);
@@ -286,7 +298,7 @@ const InstagramNotionWidget = () => {
     }
   }, []);
 
-  // Fetch posts from Notion avec extraction automatique des comptes
+  // Récupérer les posts depuis Notion
   const fetchPosts = async (apiKey = notionApiKey, dbId = databaseId) => {
     try {
       setConnectionStatus('Connexion en cours...');
@@ -307,20 +319,15 @@ const InstagramNotionWidget = () => {
       if (data.success) {
         setPosts(data.posts);
         
-        // Extraire automatiquement les comptes depuis Notion
-        const notionAccounts = [...new Set(
-          data.posts
-            .map(post => post.account)
-            .filter(account => account && account.trim() !== '')
-        )];
-        
-        // Combiner avec les comptes existants (garde "All" et les comptes manuels)
-        const allAccounts = ['All', ...accounts.filter(acc => acc !== 'All'), ...notionAccounts]
-          .filter((account, index, arr) => arr.indexOf(account) === index); // Supprime les doublons
-        
-        if (JSON.stringify(allAccounts) !== JSON.stringify(accounts)) {
-          setAccounts(allAccounts);
-          localStorage.setItem('instagramAccounts', JSON.stringify(allAccounts));
+        // Extraire automatiquement les comptes
+        if (data.meta.accounts && data.meta.accounts.length > 0) {
+          const allAccounts = ['All', ...data.meta.accounts];
+          const uniqueAccounts = [...new Set(allAccounts)];
+          
+          if (JSON.stringify(uniqueAccounts) !== JSON.stringify(accounts)) {
+            setAccounts(uniqueAccounts);
+            localStorage.setItem('instagramAccounts', JSON.stringify(uniqueAccounts));
+          }
         }
         
         setConnectionStatus(`✅ Connecté à Notion • ${data.posts.length} post(s)`);
@@ -330,7 +337,7 @@ const InstagramNotionWidget = () => {
       }
     } catch (error) {
       setConnectionStatus('❌ Erreur de connexion Notion');
-      console.error('Erreur:', error);
+      console.error('Erreur fetch:', error);
     }
   };
 
@@ -347,6 +354,11 @@ const InstagramNotionWidget = () => {
     await fetchPosts();
   };
 
+  // Obtenir le profil du compte actif
+  const getProfile = (account) => {
+    return profiles[account] || profiles['All'];
+  };
+
   // Sauvegarder profil
   const saveProfile = (account, profileData) => {
     const newProfiles = { ...profiles, [account]: profileData };
@@ -354,7 +366,7 @@ const InstagramNotionWidget = () => {
     localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
-  // Ajouter un nouveau compte
+  // Ajouter un compte manuellement
   const addAccount = () => {
     if (!newAccountName.trim() || accounts.includes(newAccountName.trim())) {
       return;
@@ -364,13 +376,12 @@ const InstagramNotionWidget = () => {
     const newAccounts = [...accounts, newAccount];
     setAccounts(newAccounts);
     
-    // Créer un profil par défaut pour le nouveau compte
+    // Créer un profil par défaut
     const newProfile = {
       username: newAccount.toLowerCase().replace(/\s+/g, '_'),
       fullName: newAccount,
       bio: `🚀 ${newAccount}\n📸 Créateur de contenu\n📍 Paris, France`,
       profilePhoto: '',
-      posts: '0',
       followers: '1,234',
       following: '567'
     };
@@ -398,7 +409,6 @@ const InstagramNotionWidget = () => {
       setActiveAccount(newAccounts[0]);
     }
     
-    // Supprimer le profil
     const newProfiles = { ...profiles };
     delete newProfiles[accountToRemove];
     setProfiles(newProfiles);
@@ -407,49 +417,48 @@ const InstagramNotionWidget = () => {
     localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
-  // Filtrer les posts par compte actif
+  // Filtrer les posts par compte
   const filteredPosts = posts.filter(post => {
     if (activeAccount === 'All') {
-      return true; // Affiche tous les posts
+      return true;
     }
     return post.account === activeAccount;
   });
 
-  // Fonction pour mettre à jour un post dans Notion (simulé)
+  // Mettre à jour un post dans Notion
   const updatePostInNotion = async (postId, newDate) => {
     try {
-      // Ici vous pourriez ajouter un appel API pour mettre à jour Notion
-      console.log(`Post ${postId} mis à jour avec la date ${newDate}`);
-      
-      // Pour l'instant, on simule la mise à jour
-      const response = await fetch(`${API_BASE}/notion/update`, {
+      await fetch(`${API_BASE}/notion`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           apiKey: notionApiKey,
+          databaseId: databaseId,
+          action: 'updatePost',
           postId: postId,
-          date: newDate,
+          newDate: newDate,
         }),
       });
-      
-      if (response.ok) {
-        console.log('Post mis à jour dans Notion avec succès');
-      }
     } catch (error) {
-      console.log('Mise à jour Notion simulée (API non implémentée)');
+      console.error('Erreur mise à jour Notion:', error);
     }
   };
 
-  // Drag & Drop handlers (CORRIGÉS)
-  const handleDragStart = (e, post, index) => {
+  // DRAG & DROP - Gestionnaires d'événements CORRIGÉS
+  const handleDragStart = (e, index) => {
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', '');
-    setDraggedPost({ post, originalIndex: index });
+    setDraggedIndex(index);
     
-    // Style du drag
-    e.dataTransfer.setDragImage(e.target, 50, 50);
+    // Style visuel du drag
+    e.target.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1';
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleDragOver = (e, index) => {
@@ -458,65 +467,48 @@ const InstagramNotionWidget = () => {
     setDragOverIndex(index);
   };
 
-  const handleDragLeave = (e) => {
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-      setDragOverIndex(null);
-    }
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
   };
 
   const handleDrop = async (e, dropIndex) => {
     e.preventDefault();
     setDragOverIndex(null);
 
-    if (!draggedPost || draggedPost.originalIndex === dropIndex) {
-      setDraggedPost(null);
+    if (draggedIndex === null || draggedIndex === dropIndex) {
       return;
     }
 
-    try {
-      // CORRECTION: Réorganiser les posts filtrés correctement
-      const newFilteredPosts = [...filteredPosts];
-      const [movedPost] = newFilteredPosts.splice(draggedPost.originalIndex, 1);
-      newFilteredPosts.splice(dropIndex, 0, movedPost);
+    // Réorganiser les posts
+    const newPosts = [...filteredPosts];
+    const [draggedPost] = newPosts.splice(draggedIndex, 1);
+    newPosts.splice(dropIndex, 0, draggedPost);
 
-      // Calculer les nouvelles dates
-      const today = new Date();
-      const postsWithNewDates = newFilteredPosts.map((post, index) => {
-        const newDate = new Date(today);
-        newDate.setDate(today.getDate() + index);
-        const dateString = newDate.toISOString().split('T')[0];
-        
-        // Mettre à jour dans Notion
-        updatePostInNotion(post.id, dateString);
-        
-        return {
-          ...post,
-          date: dateString
-        };
-      });
-
-      // CORRECTION: Mettre à jour tous les posts correctement
-      const updatedAllPosts = posts.map(post => {
-        const updatedPost = postsWithNewDates.find(p => p.id === post.id);
-        return updatedPost || post;
-      });
-
-      setPosts(updatedAllPosts);
+    // Calculer nouvelles dates
+    const today = new Date();
+    const postsWithNewDates = newPosts.map((post, index) => {
+      const newDate = new Date(today);
+      newDate.setDate(today.getDate() + index);
+      const dateString = newDate.toISOString().split('T')[0];
       
-      console.log('Réorganisation terminée:', postsWithNewDates.map(p => ({
-        title: p.title,
-        date: p.date,
-        position: postsWithNewDates.indexOf(p)
-      })));
+      // Mettre à jour dans Notion
+      updatePostInNotion(post.id, dateString);
+      
+      return { ...post, date: dateString };
+    });
 
-    } catch (error) {
-      console.error('Erreur lors de la réorganisation:', error);
-    }
+    // Mettre à jour l'état
+    const updatedAllPosts = posts.map(post => {
+      const updatedPost = postsWithNewDates.find(p => p.id === post.id);
+      return updatedPost || post;
+    });
 
-    setDraggedPost(null);
+    setPosts(updatedAllPosts);
+    
+    console.log('Posts réorganisés:', postsWithNewDates.map((p, i) => `${i + 1}. ${p.title} - ${p.date}`));
   };
 
-  // Créer une grille de 12 éléments (3x4)
+  // Créer la grille 3x4
   const gridItems = Array.from({ length: 12 }, (_, index) => {
     const post = filteredPosts[index];
     return post || null;
@@ -527,10 +519,10 @@ const InstagramNotionWidget = () => {
   return (
     <div className="w-full max-w-md mx-auto bg-white">
       {/* Header Instagram */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center space-x-3">
-          <Camera size={24} />
-          <span className="font-semibold text-lg">Instagram</span>
+          <Camera size={24} className="text-gray-800" />
+          <span className="font-semibold text-lg text-gray-800">Instagram</span>
         </div>
         <div className="flex items-center space-x-2">
           <button
@@ -538,14 +530,14 @@ const InstagramNotionWidget = () => {
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             title="Actualiser"
           >
-            <RefreshCw size={20} />
+            <RefreshCw size={20} className="text-gray-700" />
           </button>
           <button
             onClick={() => setIsConfigOpen(true)}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             title="Paramètres"
           >
-            <Settings size={20} />
+            <Settings size={20} className="text-gray-700" />
           </button>
         </div>
       </div>
@@ -617,19 +609,19 @@ const InstagramNotionWidget = () => {
       {/* Status de connexion */}
       {connectionStatus && (
         <div className="px-4 mb-4">
-          <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+          <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
             {connectionStatus}
           </div>
         </div>
       )}
 
-      {/* Onglets comptes avec bouton + */}
+      {/* Onglets comptes */}
       <div className="flex items-center space-x-2 px-4 mb-4 overflow-x-auto">
         {accounts.map((account) => (
           <button
             key={account}
             onClick={() => setActiveAccount(account)}
-            className={`px-3 py-1 text-sm rounded-full whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
               activeAccount === account
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -647,29 +639,22 @@ const InstagramNotionWidget = () => {
         
         <button
           onClick={() => setIsAccountManager(true)}
-          className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
           title="Gérer les comptes"
         >
           <Plus size={16} />
         </button>
       </div>
 
-      {/* Message d'instruction pour les comptes */}
-      {accounts.length === 1 && (
-        <div className="px-4 mb-4">
-          <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-            💡 Dans Notion, créez une colonne "Compte Instagram" (type: Select) et assignez vos posts aux comptes
-          </div>
-        </div>
-      )}
-
       {/* Grille d'images 3x4 avec drag & drop */}
       <div className="grid grid-cols-3 gap-1 p-4">
         {gridItems.map((post, index) => (
           <div
             key={post?.id || `empty-${index}`}
-            className={`relative bg-gray-100 transition-all duration-200 ${
-              dragOverIndex === index ? 'bg-blue-200 scale-105 border-2 border-blue-400 shadow-lg' : ''
+            className={`relative bg-gray-100 transition-all duration-300 ${
+              dragOverIndex === index 
+                ? 'bg-blue-200 scale-105 border-2 border-blue-500 shadow-lg' 
+                : 'hover:scale-102'
             }`}
             style={{ aspectRatio: '1080/1350' }}
             onDragOver={(e) => handleDragOver(e, index)}
@@ -678,9 +663,10 @@ const InstagramNotionWidget = () => {
           >
             {post ? (
               <div
-                className="w-full h-full cursor-grab active:cursor-grabbing select-none"
+                className="w-full h-full cursor-grab active:cursor-grabbing select-none rounded-sm overflow-hidden"
                 draggable={true}
-                onDragStart={(e) => handleDragStart(e, post, index)}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragEnd={handleDragEnd}
                 onClick={() => {
                   setSelectedPost(post);
                   setModalOpen(true);
@@ -689,8 +675,11 @@ const InstagramNotionWidget = () => {
                 <MediaDisplay urls={post.urls} type={post.type} caption={post.caption} />
               </div>
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                Vide
+              <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs bg-gray-50 rounded-sm border-2 border-dashed border-gray-200">
+                <div className="text-center">
+                  <div>Vide</div>
+                  <div className="text-xs mt-1">Glissez ici</div>
+                </div>
               </div>
             )}
           </div>
@@ -718,7 +707,7 @@ const InstagramNotionWidget = () => {
                   value={notionApiKey}
                   onChange={(e) => setNotionApiKey(e.target.value)}
                   placeholder="ntn_..."
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Format: ntn_abc123... (nouveau format Notion)
@@ -734,24 +723,24 @@ const InstagramNotionWidget = () => {
                   value={databaseId}
                   onChange={(e) => setDatabaseId(e.target.value)}
                   placeholder="32 caractères"
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              <div className="bg-blue-50 p-3 rounded text-xs">
-                <p className="font-medium mb-1">💡 Structure Notion requise :</p>
+              <div className="bg-blue-50 p-3 rounded-lg text-xs">
+                <p className="font-medium mb-2">📋 Colonnes Notion requises :</p>
                 <ul className="space-y-1 text-gray-600">
-                  <li>• Contenu (Files & media)</li>
-                  <li>• Date (Date)</li>
-                  <li>• Caption (Text)</li>
-                  <li>• Compte Instagram (Select) ← Pour multi-comptes</li>
-                  <li>• Statut (Select) ← "Posté" pour masquer</li>
+                  <li>• <strong>Contenu</strong> (Files & media) - Vos images/vidéos</li>
+                  <li>• <strong>Date</strong> (Date) - Date de publication</li>
+                  <li>• <strong>Caption</strong> (Text) - Description du post</li>
+                  <li>• <strong>Compte Instagram</strong> (Select) - Pour multi-comptes</li>
+                  <li>• <strong>Statut</strong> (Select) - "Posté" pour masquer</li>
                 </ul>
               </div>
 
               <button
                 onClick={connectToNotion}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Connecter à Notion
               </button>
@@ -783,31 +772,31 @@ const InstagramNotionWidget = () => {
                     value={newAccountName}
                     onChange={(e) => setNewAccountName(e.target.value)}
                     placeholder="Ex: Freelance Créatif"
-                    className="flex-1 p-2 border rounded"
+                    className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                     onKeyPress={(e) => e.key === 'Enter' && addAccount()}
                   />
                   <button
                     onClick={addAccount}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     Ajouter
                   </button>
                 </div>
               </div>
 
-              {/* Liste des comptes existants */}
+              {/* Liste des comptes */}
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Comptes existants
                 </label>
                 <div className="space-y-2">
                   {accounts.map((account) => (
-                    <div key={account} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                    <div key={account} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                       <span className="font-medium">{account}</span>
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => setActiveAccount(account)}
-                          className={`text-xs px-2 py-1 rounded ${
+                          className={`text-xs px-3 py-1 rounded-full transition-colors ${
                             activeAccount === account 
                               ? 'bg-blue-600 text-white' 
                               : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
@@ -818,7 +807,7 @@ const InstagramNotionWidget = () => {
                         {account !== 'All' && (
                           <button
                             onClick={() => removeAccount(account)}
-                            className="text-xs text-red-600 hover:text-red-800"
+                            className="text-xs text-red-600 hover:text-red-800 px-2"
                           >
                             Supprimer
                           </button>
@@ -829,13 +818,10 @@ const InstagramNotionWidget = () => {
                 </div>
               </div>
 
-              <div className="bg-yellow-50 p-3 rounded text-xs">
-                <p className="font-medium mb-1">📋 Instructions :</p>
-                <p className="text-gray-600">
-                  1. Dans Notion, créez une colonne "Compte Instagram" (type: <strong>Select</strong>)<br/>
-                  2. Ajoutez vos options : Freelance Créatif, Business, Perso, etc.<br/>
-                  3. Assignez chaque post à un compte<br/>
-                  4. Les onglets apparaîtront automatiquement ici !
+              <div className="bg-yellow-50 p-3 rounded-lg text-xs">
+                <p className="font-medium mb-1">💡 Instructions :</p>
+                <p className="text-gray-600 leading-relaxed">
+                  Dans Notion, créez une colonne "Compte Instagram" (type: Select) avec vos comptes (Freelance Créatif, Business, etc.) puis assignez chaque post à un compte.
                 </p>
               </div>
             </div>
@@ -886,8 +872,8 @@ const InstagramNotionWidget = () => {
         }}
       />
 
-      {/* Filigrane discret en bas */}
-      <div className="border-t bg-gray-50 py-2">
+      {/* Filigrane en bas */}
+      <div className="border-t bg-gray-50 py-3">
         <div className="text-center">
           <a
             href="https://www.instagram.com/freelance.creatif/"
@@ -915,7 +901,7 @@ const ProfileEditForm = ({ profile, onSave, onCancel }) => {
           type="text"
           value={formData.username}
           onChange={(e) => setFormData({...formData, username: e.target.value})}
-          className="w-full p-2 border rounded"
+          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -925,7 +911,7 @@ const ProfileEditForm = ({ profile, onSave, onCancel }) => {
           type="text"
           value={formData.fullName}
           onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-          className="w-full p-2 border rounded"
+          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -935,7 +921,7 @@ const ProfileEditForm = ({ profile, onSave, onCancel }) => {
           value={formData.bio}
           onChange={(e) => setFormData({...formData, bio: e.target.value})}
           rows={3}
-          className="w-full p-2 border rounded"
+          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -946,27 +932,18 @@ const ProfileEditForm = ({ profile, onSave, onCancel }) => {
           value={formData.profilePhoto}
           onChange={(e) => setFormData({...formData, profilePhoto: e.target.value})}
           placeholder="https://..."
-          className="w-full p-2 border rounded"
+          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Publications</label>
-          <input
-            type="text"
-            value={formData.posts}
-            onChange={(e) => setFormData({...formData, posts: e.target.value})}
-            className="w-full p-2 border rounded"
-          />
-        </div>
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Abonnés</label>
           <input
             type="text"
             value={formData.followers}
             onChange={(e) => setFormData({...formData, followers: e.target.value})}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div>
@@ -975,21 +952,21 @@ const ProfileEditForm = ({ profile, onSave, onCancel }) => {
             type="text"
             value={formData.following}
             onChange={(e) => setFormData({...formData, following: e.target.value})}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
-      <div className="flex space-x-3">
+      <div className="flex space-x-3 pt-4">
         <button
           onClick={() => onSave(formData)}
-          className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+          className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
           Sauvegarder
         </button>
         <button
           onClick={onCancel}
-          className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
+          className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition-colors"
         >
           Annuler
         </button>
