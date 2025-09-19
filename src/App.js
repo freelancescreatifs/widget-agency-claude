@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, AlertTriangle, Wifi, WifiOff, Plus, UserPlus } from 'lucide-react';
 
 // Configuration de l'API
 const API_BASE = 'https://widget-agency-claude.vercel.app/api';
@@ -125,6 +125,80 @@ const PostModal = ({ post, onClose, onPrevious, onNext, hasPrevious, hasNext }) 
   );
 };
 
+// Composant pour gérer les comptes
+const AccountManager = ({ accounts, onAddAccount, onClose }) => {
+  const [newAccountName, setNewAccountName] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (newAccountName.trim() && !accounts.includes(newAccountName.trim())) {
+      onAddAccount(newAccountName.trim());
+      setNewAccountName('');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-md w-full">
+        <div className="p-4 border-b flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-blue-600" />
+            <h3 className="font-semibold">Gérer les comptes Instagram</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          <div>
+            <h4 className="font-medium text-gray-800 mb-2">Comptes existants :</h4>
+            <div className="space-y-1">
+              {accounts.map(account => (
+                <div key={account} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <span className="text-sm text-gray-700">{account}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-medium text-gray-800 mb-2">Ajouter un nouveau compte :</h4>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <input
+                type="text"
+                value={newAccountName}
+                onChange={(e) => setNewAccountName(e.target.value)}
+                placeholder="Ex: Freelance Créatif, Business, Personnel..."
+                className="w-full p-2 border rounded text-sm"
+              />
+              <div className="bg-blue-50 p-3 rounded text-sm text-blue-700">
+                💡 <strong>Astuce :</strong> Créez ce nom exactement dans la colonne "Compte Instagram" de votre base Notion pour voir les posts associés.
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={!newAccountName.trim() || accounts.includes(newAccountName.trim())}
+                  className="flex-1 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Ajouter le compte
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Fermer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Composant pour afficher les erreurs
 const ErrorDisplay = ({ error, onClose, onRetry }) => {
   if (!error) return null;
@@ -165,8 +239,8 @@ const ErrorDisplay = ({ error, onClose, onRetry }) => {
   );
 };
 
-// Composant pour les médias SANS auto-slide
-const MediaDisplay = ({ urls, type, index, onClick }) => {
+// Composant pour les médias avec CAPTION dans le hover
+const MediaDisplay = ({ urls, type, index, onClick, caption, title }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const handlePrevious = (e) => {
@@ -275,14 +349,23 @@ const MediaDisplay = ({ urls, type, index, onClick }) => {
         </>
       )}
 
-      {/* Caption hover - 1/3 DE LA PAGE SEULEMENT */}
+      {/* Caption hover - 1/3 DE LA PAGE avec CAPTION */}
       {onClick && (
         <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-60 transition-all duration-200 flex items-end opacity-0 hover:opacity-100">
           <div className="w-full h-1/3 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center p-4">
             <div className="text-white text-center text-xs">
-              <div className="font-medium mb-1">Cliquer pour voir en détail</div>
-              {type === 'Carrousel' && <div className="text-gray-300">{urls.length} photos</div>}
-              {type === 'Vidéo' && <div className="text-gray-300">📹 Vidéo</div>}
+              {caption ? (
+                <div className="space-y-1">
+                  <div className="font-medium">{title || 'Post'}</div>
+                  <div className="text-gray-300 line-clamp-2">{caption}</div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="font-medium">Cliquer pour voir en détail</div>
+                  {type === 'Carrousel' && <div className="text-gray-300">{urls.length} photos</div>}
+                  {type === 'Vidéo' && <div className="text-gray-300">📹 Vidéo</div>}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -299,6 +382,7 @@ const InstagramNotionWidget = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('Non connecté');
   const [showSettings, setShowSettings] = useState(false);
+  const [showAccountManager, setShowAccountManager] = useState(false);
   const [error, setError] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [notionConfig, setNotionConfig] = useState({
@@ -437,6 +521,37 @@ const InstagramNotionWidget = () => {
     }
   };
 
+  // Ajouter un nouveau compte
+  const addAccount = (accountName) => {
+    const newAccounts = [...accounts, accountName];
+    setAccounts(newAccounts);
+    
+    // Créer un profil par défaut pour le nouveau compte
+    const newProfiles = {
+      ...profiles,
+      [accountName]: {
+        username: accountName.toLowerCase().replace(/\s+/g, '_'),
+        fullName: accountName,
+        bio: `🚀 Compte ${accountName}\n📸 Contenu de qualité`,
+        profilePhoto: '',
+        stats: {
+          posts: 'auto',
+          followers: '1,234',
+          following: '567'
+        }
+      }
+    };
+    setProfiles(newProfiles);
+    
+    // Sauvegarder
+    localStorage.setItem('accounts-config', JSON.stringify(newAccounts));
+    localStorage.setItem('profiles-config', JSON.stringify(newProfiles));
+    
+    // Changer vers le nouveau compte
+    setActiveAccount(accountName);
+    setShowAccountManager(false);
+  };
+
   // Sauvegarde du profil
   const saveProfile = () => {
     localStorage.setItem('profiles-config', JSON.stringify(profiles));
@@ -482,6 +597,13 @@ const InstagramNotionWidget = () => {
           <span className="font-semibold text-lg">Instagram</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowAccountManager(true)}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+            title="Gérer les comptes"
+          >
+            <UserPlus className="w-5 h-5" />
+          </button>
           <button
             onClick={connectToNotion}
             disabled={isLoading}
@@ -801,6 +923,8 @@ const InstagramNotionWidget = () => {
                     type={post.type}
                     index={index}
                     onClick={() => openModal(post)}
+                    caption={post.caption}
+                    title={post.title}
                   />
                 </div>
               );
@@ -840,6 +964,15 @@ const InstagramNotionWidget = () => {
           Créé par @Freelancecreatif
         </a>
       </div>
+
+      {/* Modal de gestion des comptes */}
+      {showAccountManager && (
+        <AccountManager
+          accounts={accounts}
+          onAddAccount={addAccount}
+          onClose={() => setShowAccountManager(false)}
+        />
+      )}
 
       {/* Modal plein écran */}
       {selectedPost && (
