@@ -335,22 +335,32 @@ const InstagramNotionWidget = () => {
       const data = await response.json();
 
       if (data.success) {
-        // Trier par position si disponible, sinon par date
-        const sortedPosts = data.posts.sort((a, b) => {
-          if (a.position !== undefined && b.position !== undefined) {
-            return a.position - b.position; // Ordre croissant par position
-          }
-          // Fallback sur les dates (plus récent en premier)
-          return new Date(b.date) - new Date(a.date);
-        });
-
-        setPosts(sortedPosts);
+        // NE PAS trier automatiquement - garder l'ordre brut depuis Notion
+        setPosts(data.posts);
         
-        // Initialiser l'ordre local s'il n'existe pas
+        // Initialiser l'ordre local SEULEMENT s'il n'existe pas du tout
         if (localOrder.length === 0) {
-          const initialOrder = sortedPosts.map(post => post.id);
+          // Pour la première fois, trier par date pour avoir un ordre initial logique
+          const sortedForInit = [...data.posts].sort((a, b) => {
+            if (a.position !== undefined && b.position !== undefined) {
+              return a.position - b.position;
+            }
+            return new Date(b.date) - new Date(a.date);
+          });
+          
+          const initialOrder = sortedForInit.map(post => post.id);
           setLocalOrder(initialOrder);
           localStorage.setItem('localOrder', JSON.stringify(initialOrder));
+        } else {
+          // Si l'ordre local existe déjà, ajouter seulement les nouveaux posts à la fin
+          const existingIds = new Set(localOrder);
+          const newPosts = data.posts.filter(post => !existingIds.has(post.id));
+          
+          if (newPosts.length > 0) {
+            const updatedOrder = [...localOrder, ...newPosts.map(post => post.id)];
+            setLocalOrder(updatedOrder);
+            localStorage.setItem('localOrder', JSON.stringify(updatedOrder));
+          }
         }
         
         setIsConfigOpen(false);
@@ -826,16 +836,6 @@ const InstagramNotionWidget = () => {
           <Plus size={16} />
           <span>{accounts.length === 0 ? 'Ajouter des comptes' : 'Gérer les comptes'}</span>
         </button>
-      </div>
-
-      {/* Message d'info sur le système */}
-      <div className="px-4 mb-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
-          <p className="text-blue-800 font-medium mb-1">💡 Drag & Drop instantané activé !</p>
-          <p className="text-blue-600">
-            L'ordre est sauvé localement. Pour synchroniser avec Notion, ajoutez une colonne "Position" (Number) dans votre base.
-          </p>
-        </div>
       </div>
 
       {/* Grille d'images 3x4 avec drag & drop INSTANTANÉ */}
