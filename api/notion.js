@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       status: "OK",
       message: "API Notion active",
-      version: "6.0-native-fetch"
+      version: "7.0-date-based"
     });
     return;
   }
@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { apiKey, databaseId, action, postId, newDate, pageId, position } = req.body;
+    const { apiKey, databaseId, action, postId, newDate, pageId } = req.body;
 
     // Validation des paramètres
     if (!apiKey || !databaseId) {
@@ -48,55 +48,10 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // ========== NOUVELLE ACTION : Mise à jour de la position ==========
-    if (action === 'updatePosition' && (postId || pageId) && position !== undefined) {
+    // ========== ACTION : Mise à jour de la DATE (pour drag & drop) ==========
+    if (action === 'updateDate' && (postId || pageId) && newDate) {
       try {
         const updateResponse = await fetch(`https://api.notion.com/v1/pages/${postId || pageId}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'Notion-Version': '2022-06-28'
-          },
-          body: JSON.stringify({
-            properties: {
-              "Position": {
-                number: position
-              }
-            }
-          })
-        });
-
-        const updateResult = await updateResponse.json();
-
-        if (updateResponse.ok) {
-          res.status(200).json({
-            success: true,
-            message: `Position ${position} mise à jour`,
-            data: updateResult
-          });
-        } else {
-          res.status(400).json({
-            success: false,
-            error: `Erreur mise à jour position: ${updateResponse.status}`,
-            details: updateResult
-          });
-        }
-        return;
-      } catch (error) {
-        res.status(500).json({
-          success: false,
-          error: "Erreur lors de la mise à jour de la position",
-          details: error.message
-        });
-        return;
-      }
-    }
-
-    // Action de mise à jour d'un post (existant)
-    if (action === 'updatePost' && postId && newDate) {
-      try {
-        const updateResponse = await fetch(`https://api.notion.com/v1/pages/${postId}`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
@@ -117,13 +72,13 @@ module.exports = async function handler(req, res) {
         if (updateResponse.ok) {
           res.status(200).json({
             success: true,
-            message: "Post mis à jour avec succès",
+            message: `Date mise à jour: ${newDate}`,
             data: updateResult
           });
         } else {
           res.status(400).json({
             success: false,
-            error: `Erreur mise à jour: ${updateResponse.status}`,
+            error: `Erreur mise à jour date: ${updateResponse.status}`,
             details: updateResult
           });
         }
@@ -131,7 +86,7 @@ module.exports = async function handler(req, res) {
       } catch (error) {
         res.status(500).json({
           success: false,
-          error: "Erreur lors de la mise à jour",
+          error: "Erreur lors de la mise à jour de la date",
           details: error.message
         });
         return;
@@ -149,12 +104,8 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         sorts: [
           {
-            property: 'Position',
-            direction: 'ascending'
-          },
-          {
             property: 'Date',
-            direction: 'descending'
+            direction: 'descending'  // Plus récent en premier
           }
         ]
       })
@@ -188,7 +139,7 @@ module.exports = async function handler(req, res) {
                      properties.Name?.title?.[0]?.text?.content ||
                      `Post ${row.id.slice(-6)}`;
 
-        // Extraction des fichiers média - ajout de "Couverture"
+        // Extraction des fichiers média - "Couverture" en premier
         const contentProperty = properties.Couverture?.files ||
                                properties.Contenu?.files || 
                                properties.Content?.files || 
@@ -221,12 +172,12 @@ module.exports = async function handler(req, res) {
                        properties.Texte?.rich_text?.[0]?.text?.content || 
                        '';
 
-        // Extraction du type
+        // Détection automatique du type
         const type = properties.Type?.select?.name ||
                     properties.Category?.select?.name ||
                     properties.Catégorie?.select?.name ||
                     (urls.length > 1 ? 'Carrousel' : 
-                     urls.some(url => url.match(/\.(mp4|mov|webm|avi)(\?|$)/i)) ? 'Vidéo' : 'Image');
+                     urls.some(url => url.match(/\.(mp4|mov|webm|avi|m4v)(\?|$)/i)) ? 'Vidéo' : 'Image');
 
         // Extraction du compte
         const account = properties['Compte Instagram']?.select?.name ||
@@ -235,9 +186,6 @@ module.exports = async function handler(req, res) {
                        properties.Compte?.select?.name ||
                        properties.Instagram?.select?.name || '';
 
-        // Extraction de la position
-        const position = properties.Position?.number || 0;
-
         return {
           id: row.id,
           title,
@@ -245,8 +193,7 @@ module.exports = async function handler(req, res) {
           date: dateProperty,
           caption,
           type,
-          account,
-          position
+          account
         };
       })
       .filter(post => post.urls.length > 0);
