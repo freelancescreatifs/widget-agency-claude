@@ -4,6 +4,22 @@ import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play,
 // Configuration de l'API
 const API_BASE = 'https://widget-agency-claude.vercel.app/api';
 
+// Détection automatique du type de média
+const detectMediaType = (urls) => {
+  if (!urls || urls.length === 0) return 'Image';
+  
+  // Vérifier si c'est une vidéo
+  const hasVideo = urls.some(url => 
+    url.match(/\.(mp4|mov|webm|avi|m4v)(\?|$)/i) ||
+    url.includes('video') ||
+    url.includes('.mp4')
+  );
+  
+  if (hasVideo) return 'Vidéo';
+  if (urls.length > 1) return 'Carrousel';
+  return 'Image';
+};
+
 // Composant pour afficher les médias
 const MediaDisplay = ({ urls, type, caption }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -16,17 +32,16 @@ const MediaDisplay = ({ urls, type, caption }) => {
     );
   }
 
-  const isVideo = (url) => {
-    return url.match(/\.(mp4|mov|webm|avi)(\?|$)/i) || type === 'Vidéo';
-  };
+  const detectedType = detectMediaType(urls);
+  const isVideo = detectedType === 'Vidéo';
+  const isCarousel = urls.length > 1;
 
   const currentUrl = urls[currentIndex];
-  const isCurrentVideo = isVideo(currentUrl);
 
   return (
     <div className="relative w-full h-full group">
       {/* Media principal */}
-      {isCurrentVideo ? (
+      {currentUrl && currentUrl.match(/\.(mp4|mov|webm|avi|m4v)(\?|$)/i) ? (
         <video
           src={currentUrl}
           className="w-full h-full object-cover"
@@ -47,8 +62,8 @@ const MediaDisplay = ({ urls, type, caption }) => {
         />
       )}
 
-      {/* Icônes en haut à droite */}
-      {urls.length > 1 && (
+      {/* Icône carrousel */}
+      {isCarousel && (
         <div className="absolute top-2 right-2 text-white drop-shadow-lg z-10">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <rect x="3" y="3" width="6" height="18"/>
@@ -58,14 +73,15 @@ const MediaDisplay = ({ urls, type, caption }) => {
         </div>
       )}
       
-      {isCurrentVideo && (
+      {/* Icône vidéo */}
+      {isVideo && (
         <div className="absolute top-2 right-2 text-white drop-shadow-lg z-10">
           <Play size={16} fill="white" stroke="white" />
         </div>
       )}
 
       {/* Navigation carrousel */}
-      {urls.length > 1 && (
+      {isCarousel && (
         <>
           <button
             onClick={(e) => {
@@ -107,7 +123,7 @@ const MediaDisplay = ({ urls, type, caption }) => {
         </>
       )}
 
-      {/* Overlay SEULEMENT en bas avec caption */}
+      {/* Overlay avec caption */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ height: '40px' }}>
         <div className="absolute bottom-1 left-2 right-2 text-white text-xs font-medium truncate">
           {caption || 'Cliquer pour voir en détail'}
@@ -124,6 +140,7 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
   if (!isOpen || !post) return null;
 
   const urls = post.urls || [];
+  const detectedType = detectMediaType(urls);
 
   return (
     <div 
@@ -134,7 +151,6 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
         className="relative max-w-2xl max-h-[90vh] w-full h-full flex items-center justify-center" 
         onClick={e => e.stopPropagation()}
       >
-        {/* Bouton fermer */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-white hover:text-gray-300 z-20 bg-black bg-opacity-50 rounded-full p-2"
@@ -142,7 +158,6 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
           <X size={24} />
         </button>
 
-        {/* Navigation entre posts */}
         {onNavigate && (
           <>
             <button
@@ -161,11 +176,10 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
         )}
 
         <div className="flex flex-col items-center max-w-lg">
-          {/* Média principal */}
           <div className="relative bg-black rounded-lg overflow-hidden">
             {urls[currentIndex] && (
               <>
-                {post.type === 'Vidéo' ? (
+                {urls[currentIndex].match(/\.(mp4|mov|webm|avi|m4v)(\?|$)/i) ? (
                   <video
                     src={urls[currentIndex]}
                     className="max-w-sm max-h-[60vh] object-contain"
@@ -180,7 +194,6 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
                   />
                 )}
 
-                {/* Navigation carrousel dans modal */}
                 {urls.length > 1 && (
                   <>
                     <button
@@ -213,7 +226,6 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
             )}
           </div>
 
-          {/* Informations du post */}
           <div className="text-white text-center mt-6 px-4">
             <h3 className="text-lg font-semibold mb-2">{post.title}</h3>
             {post.caption && (
@@ -221,7 +233,7 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
             )}
             <div className="text-xs text-gray-400 space-y-1">
               <p>📅 {post.date && new Date(post.date).toLocaleDateString('fr-FR')}</p>
-              <p>📷 {post.type} {urls.length > 1 && `(${urls.length} médias)`}</p>
+              <p>📷 {detectedType} {urls.length > 1 && `(${urls.length} médias)`}</p>
               {post.account && <p>👤 {post.account}</p>}
             </div>
           </div>
@@ -233,7 +245,6 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
 
 // Composant principal
 const InstagramNotionWidget = () => {
-  // États de base
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isProfileEdit, setIsProfileEdit] = useState(false);
   const [notionApiKey, setNotionApiKey] = useState('');
@@ -241,13 +252,12 @@ const InstagramNotionWidget = () => {
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // États pour le drag & drop BASÉ SUR POSITION
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
-  const [localOrder, setLocalOrder] = useState([]); // Ordre local pour feedback instantané
+  const [localOrder, setLocalOrder] = useState([]);
 
-  // États pour multi-comptes
   const [accounts, setAccounts] = useState([]);
   const [activeAccount, setActiveAccount] = useState('All');
   const [showAllTab, setShowAllTab] = useState(true);
@@ -256,7 +266,6 @@ const InstagramNotionWidget = () => {
   const [editingAccount, setEditingAccount] = useState(null);
   const [editAccountName, setEditAccountName] = useState('');
 
-  // Profils par compte
   const [profiles, setProfiles] = useState({
     'All': {
       username: 'mon_compte',
@@ -268,7 +277,6 @@ const InstagramNotionWidget = () => {
     }
   });
 
-  // Charger les données au démarrage
   useEffect(() => {
     const savedApiKey = localStorage.getItem('notionApiKey');
     const savedDbId = localStorage.getItem('databaseId');
@@ -318,7 +326,6 @@ const InstagramNotionWidget = () => {
     }
   }, []);
 
-  // Récupérer les posts depuis Notion
   const fetchPosts = async (apiKey = notionApiKey, dbId = databaseId) => {
     try {
       const response = await fetch(`${API_BASE}/notion`, {
@@ -335,12 +342,9 @@ const InstagramNotionWidget = () => {
       const data = await response.json();
 
       if (data.success) {
-        // NE PAS trier automatiquement - garder l'ordre brut depuis Notion
         setPosts(data.posts);
         
-        // Initialiser l'ordre local SEULEMENT s'il n'existe pas du tout
         if (localOrder.length === 0) {
-          // Pour la première fois, trier par date pour avoir un ordre initial logique
           const sortedForInit = [...data.posts].sort((a, b) => {
             if (a.position !== undefined && b.position !== undefined) {
               return a.position - b.position;
@@ -352,7 +356,6 @@ const InstagramNotionWidget = () => {
           setLocalOrder(initialOrder);
           localStorage.setItem('localOrder', JSON.stringify(initialOrder));
         } else {
-          // Si l'ordre local existe déjà, ajouter seulement les nouveaux posts à la fin
           const existingIds = new Set(localOrder);
           const newPosts = data.posts.filter(post => !existingIds.has(post.id));
           
@@ -372,7 +375,6 @@ const InstagramNotionWidget = () => {
     }
   };
 
-  // Connecter à Notion
   const connectToNotion = async () => {
     if (!notionApiKey || !databaseId) {
       return;
@@ -384,7 +386,44 @@ const InstagramNotionWidget = () => {
     await fetchPosts();
   };
 
-  // Obtenir le profil du compte actif
+  // Synchroniser l'ordre avec Notion automatiquement
+  const syncOrderToNotion = async (newOrder) => {
+    if (isSyncing) return;
+    
+    setIsSyncing(true);
+    console.log('🔄 Synchronisation avec Notion...');
+
+    try {
+      // Mettre à jour chaque post avec sa nouvelle position
+      for (let i = 0; i < newOrder.length; i++) {
+        const postId = newOrder[i];
+        const position = i + 1;
+        
+        await fetch(`${API_BASE}/notion/update-position`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            apiKey: notionApiKey,
+            databaseId: databaseId,
+            pageId: postId,
+            position: position,
+          }),
+        });
+        
+        // Petit délai pour éviter de surcharger l'API
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      console.log('✅ Synchronisation Notion terminée !');
+    } catch (error) {
+      console.error('❌ Erreur synchronisation Notion:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const getProfile = (account) => {
     if (profiles[account]) {
       return profiles[account];
@@ -399,14 +438,12 @@ const InstagramNotionWidget = () => {
     };
   };
 
-  // Sauvegarder profil
   const saveProfile = (account, profileData) => {
     const newProfiles = { ...profiles, [account]: profileData };
     setProfiles(newProfiles);
     localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
-  // Masquer l'onglet "All"
   const hideAllTab = () => {
     setShowAllTab(false);
     localStorage.setItem('showAllTab', 'false');
@@ -415,7 +452,6 @@ const InstagramNotionWidget = () => {
     }
   };
 
-  // Ajouter un compte manuellement
   const addAccount = () => {
     if (!newAccountName.trim() || accounts.includes(newAccountName.trim())) {
       return;
@@ -445,7 +481,6 @@ const InstagramNotionWidget = () => {
     setIsAccountManager(false);
   };
 
-  // Supprimer un compte
   const removeAccount = (accountToRemove) => {
     const newAccounts = accounts.filter(acc => acc !== accountToRemove);
     setAccounts(newAccounts);
@@ -468,7 +503,6 @@ const InstagramNotionWidget = () => {
     localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
-  // Supprimer TOUS les comptes
   const removeAllAccounts = () => {
     setAccounts([]);
     setActiveAccount('All');
@@ -481,7 +515,6 @@ const InstagramNotionWidget = () => {
     setIsAccountManager(false);
   };
 
-  // Renommer un compte
   const renameAccount = (oldName, newName) => {
     if (!newName.trim() || newName === oldName || accounts.includes(newName.trim())) {
       setEditingAccount(null);
@@ -512,9 +545,7 @@ const InstagramNotionWidget = () => {
     setEditAccountName('');
   };
 
-  // Obtenir les posts filtrés selon l'ordre local
   const getOrderedFilteredPosts = () => {
-    // Filtrer par compte d'abord
     const accountFiltered = posts.filter(post => {
       if (activeAccount === 'All' || accounts.length === 0) {
         return true;
@@ -522,11 +553,9 @@ const InstagramNotionWidget = () => {
       return post.account === activeAccount;
     });
 
-    // Appliquer l'ordre local
     if (localOrder.length > 0) {
       const ordered = [];
       
-      // Ajouter les posts selon l'ordre local
       localOrder.forEach(id => {
         const post = accountFiltered.find(p => p.id === id);
         if (post) {
@@ -534,7 +563,6 @@ const InstagramNotionWidget = () => {
         }
       });
       
-      // Ajouter les nouveaux posts pas encore dans l'ordre local
       accountFiltered.forEach(post => {
         if (!localOrder.includes(post.id)) {
           ordered.push(post);
@@ -549,7 +577,6 @@ const InstagramNotionWidget = () => {
 
   const filteredPosts = getOrderedFilteredPosts();
 
-  // DRAG & DROP BASÉ SUR L'ORDRE LOCAL - VRAIMENT INSTANTANÉ
   const handleDragStart = (e, index) => {
     console.log(`🎯 Début drag: index ${index}`);
     setDraggedIndex(index);
@@ -603,89 +630,42 @@ const InstagramNotionWidget = () => {
       return;
     }
 
-    console.log(`🔄 DRAG & DROP INSTANTANÉ: "${sourcePost.title}" de ${draggedIndex} → ${dropIndex}`);
+    console.log(`🔄 DRAG & DROP: "${sourcePost.title}" de ${draggedIndex} → ${dropIndex}`);
 
-    // Créer le nouvel ordre LOCAL instantanément
     const newLocalOrder = [...localOrder];
     const sourceId = sourcePost.id;
     
-    // Supprimer l'ID de son ancienne position
     const currentIndex = newLocalOrder.indexOf(sourceId);
     if (currentIndex !== -1) {
       newLocalOrder.splice(currentIndex, 1);
     }
     
-    // Déterminer la nouvelle position dans l'ordre global
     let targetPosition;
     if (dropIndex >= filteredPosts.length) {
-      // Dropped sur une case vide - ajouter à la fin
       targetPosition = newLocalOrder.length;
     } else {
-      // Dropped sur un post existant - insérer à cette position
       const targetPost = filteredPosts[dropIndex];
       targetPosition = newLocalOrder.indexOf(targetPost.id);
       if (targetPosition === -1) targetPosition = dropIndex;
     }
     
-    // Insérer à la nouvelle position
     newLocalOrder.splice(targetPosition, 0, sourceId);
     
-    // Mettre à jour l'ordre local IMMÉDIATEMENT
     setLocalOrder(newLocalOrder);
     localStorage.setItem('localOrder', JSON.stringify(newLocalOrder));
     
     console.log('✅ Ordre mis à jour instantanément !');
-    console.log('📋 Nouvel ordre:', newLocalOrder);
 
-    // Optionnel : Synchroniser avec Notion si vous avez un champ "Position"
-    setTimeout(async () => {
-      console.log('🔄 Synchronisation Notion (optionnelle)...');
-      
-      try {
-        // Si vous ajoutez un champ "Position" dans Notion, décommentez ceci :
-        /*
-        for (let i = 0; i < newLocalOrder.length; i++) {
-          const postId = newLocalOrder[i];
-          await updatePostPosition(postId, i + 1);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        */
-        console.log('✅ Synchronisation terminée');
-      } catch (error) {
-        console.error('❌ Erreur synchronisation:', error);
-      }
-    }, 100);
+    // Synchroniser automatiquement avec Notion
+    setTimeout(() => {
+      syncOrderToNotion(newLocalOrder);
+    }, 500);
 
     setDraggedIndex(null);
   };
 
-  // Fonction pour mettre à jour la position dans Notion (si vous ajoutez le champ)
-  const updatePostPosition = async (postId, position) => {
-    try {
-      const response = await fetch(`${API_BASE}/notion`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          apiKey: notionApiKey,
-          databaseId: databaseId,
-          action: 'updatePosition',
-          postId: postId,
-          position: position,
-        }),
-      });
-
-      const result = await response.json();
-      return result.success;
-    } catch (error) {
-      console.error('❌ Erreur mise à jour position:', error);
-      return false;
-    }
-  };
-
-  // Créer la grille 3x4
-  const gridItems = Array.from({ length: 12 }, (_, index) => {
+  // Grille 3x20 = 60 posts
+  const gridItems = Array.from({ length: 60 }, (_, index) => {
     const post = filteredPosts[index];
     return post || null;
   });
@@ -703,6 +683,9 @@ const InstagramNotionWidget = () => {
           <span className="font-semibold text-lg text-gray-800">Instagram</span>
         </div>
         <div className="flex items-center space-x-2">
+          {isSyncing && (
+            <div className="text-xs text-blue-600 animate-pulse">Sync...</div>
+          )}
           <button
             onClick={() => fetchPosts()}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -826,7 +809,7 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Bouton + pour gérer les comptes */}
+      {/* Bouton gérer les comptes */}
       <div className="flex justify-center px-4 mb-4">
         <button
           onClick={() => setIsAccountManager(true)}
@@ -838,7 +821,7 @@ const InstagramNotionWidget = () => {
         </button>
       </div>
 
-      {/* Grille d'images 3x4 avec drag & drop INSTANTANÉ */}
+      {/* Grille 3x20 = 60 posts */}
       <div className="grid grid-cols-3 gap-1 p-4">
         {gridItems.map((post, index) => (
           <div
@@ -871,7 +854,6 @@ const InstagramNotionWidget = () => {
               >
                 <MediaDisplay urls={post.urls} type={post.type} caption={post.caption} />
                 
-                {/* Indicateur de drag moderne */}
                 {draggedIndex === index && (
                   <div className="absolute inset-0 bg-blue-500 bg-opacity-25 flex items-center justify-center z-10">
                     <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg flex items-center space-x-2">
@@ -894,10 +876,7 @@ const InstagramNotionWidget = () => {
                 onDrop={(e) => handleDrop(e, index)}
               >
                 <div className="text-center">
-                  <div>{dragOverIndex === index ? '📍 Déposer ici' : 'Vide'}</div>
-                  <div className="text-xs mt-1">
-                    {dragOverIndex === index ? '✨ Zone de drop active' : 'Position ' + (index + 1)}
-                  </div>
+                  <div>{dragOverIndex === index ? '📍' : 'Vide'}</div>
                 </div>
               </div>
             )}
@@ -908,7 +887,7 @@ const InstagramNotionWidget = () => {
       {/* Configuration Modal */}
       {isConfigOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Configuration Notion</h3>
               <button onClick={() => setIsConfigOpen(false)}>
@@ -928,9 +907,6 @@ const InstagramNotionWidget = () => {
                   placeholder="ntn_..."
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Format: ntn_abc123... (nouveau format Notion)
-                </p>
               </div>
 
               <div>
@@ -947,17 +923,16 @@ const InstagramNotionWidget = () => {
               </div>
 
               <div className="bg-green-50 p-3 rounded-lg text-xs">
-                <p className="font-medium mb-2">📋 Colonnes Notion pour drag & drop optimal :</p>
+                <p className="font-medium mb-2">📋 Colonnes Notion requises :</p>
                 <ul className="space-y-1 text-gray-600">
-                  <li>• <strong>Contenu</strong> (Files & media) - Vos images/vidéos</li>
+                  <li>• <strong>Couverture</strong> (Files & media) - Vos images/vidéos</li>
                   <li>• <strong>Date</strong> (Date) - Date de publication</li>
-                  <li>• <strong>Caption</strong> (Text) - Description du post</li>
-                  <li>• <strong>Position</strong> (Number) - Pour sync drag & drop 🆕</li>
-                  <li>• <strong>Compte Instagram</strong> (Select) - Pour multi-comptes</li>
-                  <li>• <strong>Statut</strong> (Select) - "Posté" pour masquer</li>
+                  <li>• <strong>Caption</strong> (Text) - Description</li>
+                  <li>• <strong>Position</strong> (Number) - Ordre (sync auto) ⚡</li>
+                  <li>• <strong>Compte Instagram</strong> (Select) - Multi-comptes</li>
                 </ul>
                 <p className="text-green-700 mt-2 font-medium">
-                  💡 La colonne "Position" permet de synchroniser l'ordre avec Notion
+                  💡 Le type (Image/Carrousel/Vidéo) est détecté automatiquement
                 </p>
               </div>
 
@@ -975,7 +950,7 @@ const InstagramNotionWidget = () => {
       {/* Gestion des comptes */}
       {isAccountManager && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Gérer les comptes</h3>
               <button onClick={() => setIsAccountManager(false)}>
@@ -984,7 +959,6 @@ const InstagramNotionWidget = () => {
             </div>
 
             <div className="space-y-4">
-              {/* Ajouter un compte */}
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Ajouter un nouveau compte
@@ -1007,7 +981,6 @@ const InstagramNotionWidget = () => {
                 </div>
               </div>
 
-              {/* Liste des comptes */}
               {(accounts.length > 0 || shouldShowAllTab) && (
                 <div>
                   <label className="block text-sm font-medium mb-2">
@@ -1129,13 +1102,6 @@ const InstagramNotionWidget = () => {
                   )}
                 </div>
               )}
-
-              <div className="bg-yellow-50 p-3 rounded-lg text-xs">
-                <p className="font-medium mb-1">💡 Instructions :</p>
-                <p className="text-gray-600 leading-relaxed">
-                  Ajoutez des comptes pour organiser vos posts. Dans Notion, créez une colonne "Compte Instagram" (type: Select) avec vos comptes puis assignez chaque post à un compte.
-                </p>
-              </div>
             </div>
           </div>
         </div>
@@ -1184,7 +1150,7 @@ const InstagramNotionWidget = () => {
         }}
       />
 
-      {/* Filigrane en bas */}
+      {/* Filigrane */}
       <div className="border-t bg-gray-50 py-3">
         <div className="text-center">
           <a
