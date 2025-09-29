@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, Plus, ChevronDown } from 'lucide-react';
 
-const API_BASE = 'https://widget-agency-claude.vercel.app/api';
+const API_BASE = 'https://freelance-creatif.vercel.app/api';
 
 const detectMediaType = (urls) => {
   if (!urls || urls.length === 0) return 'Image';
@@ -246,7 +246,6 @@ const InstagramNotionWidget = () => {
 
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
-  const [localOrder, setLocalOrder] = useState([]);
 
   const [accounts, setAccounts] = useState([]);
   const [activeAccount, setActiveAccount] = useState('All');
@@ -280,7 +279,6 @@ const InstagramNotionWidget = () => {
     const savedProfiles = localStorage.getItem('instagramProfiles');
     const savedAccounts = localStorage.getItem('instagramAccounts');
     const savedShowAllTab = localStorage.getItem('showAllTab');
-    const savedLocalOrder = localStorage.getItem('localOrder');
     
     if (savedApiKey) setNotionApiKey(savedApiKey);
     if (savedDbId) setDatabaseId(savedDbId);
@@ -295,14 +293,6 @@ const InstagramNotionWidget = () => {
     
     if (savedShowAllTab !== null) {
       setShowAllTab(savedShowAllTab === 'true');
-    }
-    
-    if (savedLocalOrder) {
-      try {
-        setLocalOrder(JSON.parse(savedLocalOrder));
-      } catch (e) {
-        console.error('Erreur parsing localOrder:', e);
-      }
     }
     
     if (savedAccounts) {
@@ -342,37 +332,17 @@ const InstagramNotionWidget = () => {
       const data = await response.json();
 
       if (data.success) {
-        const oldCount = posts.length;
+        const oldPostIds = new Set(posts.map(p => p.id));
+        const newPosts = data.posts.filter(p => !oldPostIds.has(p.id));
+        
         setPosts(data.posts);
         
-        if (localOrder.length === 0) {
-          const sortedForInit = [...data.posts].sort((a, b) => {
-            if (a.position !== undefined && b.position !== undefined) {
-              return a.position - b.position;
-            }
-            return new Date(b.date) - new Date(a.date);
-          });
-          
-          const initialOrder = sortedForInit.map(post => post.id);
-          setLocalOrder(initialOrder);
-          localStorage.setItem('localOrder', JSON.stringify(initialOrder));
-          
-          if (data.posts.length > 0) {
-            showNotification(`${data.posts.length} posts chargés`, 'success');
-          }
+        if (posts.length === 0 && data.posts.length > 0) {
+          showNotification(`${data.posts.length} posts chargés`, 'success');
+        } else if (newPosts.length > 0) {
+          showNotification(`${newPosts.length} nouveau(x) post(s) ajouté(s)`, 'success');
         } else {
-          const existingIds = new Set(localOrder);
-          const newPosts = data.posts.filter(post => !existingIds.has(post.id));
-          
-          if (newPosts.length > 0) {
-            const updatedOrder = [...localOrder, ...newPosts.map(post => post.id)];
-            setLocalOrder(updatedOrder);
-            localStorage.setItem('localOrder', JSON.stringify(updatedOrder));
-            
-            showNotification(`${newPosts.length} nouveau(x) post(s) ajouté(s)`, 'success');
-          } else {
-            showNotification('Feed à jour', 'info');
-          }
+          showNotification('Feed à jour', 'info');
         }
         
         setIsConfigOpen(false);
@@ -390,49 +360,72 @@ const InstagramNotionWidget = () => {
     }
   };
 
-  const syncOrderToNotion = async (newOrder) => {
+  // Calculer une nouvelle date entre deux posts
+  const calculateNewDate = (prevPost, nextPost) => {
+    const now = new Date();
+    
+    if (!prevPost && !nextPost) {
+      return now.toISOString().split('T')[0];
+    }
+    
+    if (!prevPost) {
+      const nextDate = new Date(nextPost.date);
+      const newDate = new Date(nextDate.getTime() + 24 * 60 * 60 * 1000);
+      return newDate.toISOString().split('T')[0];
+    }
+    
+    if (!nextPost) {
+      const prevDate = new Date(prevPost.date);
+      const newDate = new Date(prevDate.getTime() - 24 * 60 * 60 * 1000);
+      return newDate.toISOString().split('T')[0];
+    }
+    
+    const prevTime = new Date(prevPost.date).getTime();
+    const nextTime = new Date(nextPost.date).getTime();
+    const middleTime = (prevTime + nextTime) / 2;
+    
+    return new Date(middleTime).toISOString().split('T')[0];
+  };
+
+  // Synchroniser la nouvelle date avec Notion
+  const syncDateToNotion = async (postId, newDate) => {
     if (isSyncing) return;
     
     setIsSyncing(true);
-    setShowRefreshMenu(false);
-    console.log('🔄 Synchronisation avec Notion en cours...');
+    console.log(`🔄 Mise à jour de la date pour ${postId}: ${newDate}`);
 
     try {
-      for (let i = 0; i < newOrder.length; i++) {
-        const postId = newOrder[i];
-        const position = i + 1;
-        
-        console.log(`Mise à jour position ${position} pour post ${postId}`);
-        
-        const response = await fetch(`${API_BASE}/notion`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            apiKey: notionApiKey,
-            databaseId: databaseId,
-            action: 'updatePosition',
-            pageId: postId,
-            position: position,
-          }),
-        });
-        
-        const result = await response.json();
-        
-        if (!result.success) {
-          console.error(`Erreur pour post ${postId}:`, result.error);
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 150));
-      }
+      const response = await fetch(`${API_BASE}/notion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          apiKey: notionApiKey,
+          databaseId: databaseId,
+          action: 'updateDate',
+          postId: postId,
+          newDate: newDate,
+        }),
+      });
       
-      console.log('✅ Synchronisation Notion terminée !');
-      showNotification('Ordre synchronisé avec Notion', 'success');
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ Date mise à jour dans Notion');
+        showNotification(`Date mise à jour: ${new Date(newDate).toLocaleDateString('fr-FR')}`, 'success');
+        
+        setTimeout(() => {
+          fetchPosts();
+        }, 1000);
+      } else {
+        console.error('Erreur:', result.error);
+        showNotification('Erreur lors de la mise à jour', 'error');
+      }
       
     } catch (error) {
       console.error('Erreur synchronisation:', error);
-      showNotification('Erreur lors de la synchronisation', 'error');
+      showNotification('Erreur de connexion', 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -571,6 +564,7 @@ const InstagramNotionWidget = () => {
     setEditAccountName('');
   };
 
+  // Filtrer et trier les posts par date (chronologique inversé = plus récent en premier)
   const getOrderedFilteredPosts = () => {
     const accountFiltered = posts.filter(post => {
       if (activeAccount === 'All' || accounts.length === 0) {
@@ -579,26 +573,9 @@ const InstagramNotionWidget = () => {
       return post.account === activeAccount;
     });
 
-    if (localOrder.length > 0) {
-      const ordered = [];
-      
-      localOrder.forEach(id => {
-        const post = accountFiltered.find(p => p.id === id);
-        if (post) {
-          ordered.push(post);
-        }
-      });
-      
-      accountFiltered.forEach(post => {
-        if (!localOrder.includes(post.id)) {
-          ordered.push(post);
-        }
-      });
-      
-      return ordered;
-    }
-    
-    return accountFiltered;
+    return accountFiltered.sort((a, b) => {
+      return new Date(b.date) - new Date(a.date);
+    });
   };
 
   const filteredPosts = getOrderedFilteredPosts();
@@ -652,31 +629,19 @@ const InstagramNotionWidget = () => {
       return;
     }
 
-    const newLocalOrder = [...localOrder];
-    const sourceId = sourcePost.id;
-    
-    const currentIndex = newLocalOrder.indexOf(sourceId);
-    if (currentIndex !== -1) {
-      newLocalOrder.splice(currentIndex, 1);
-    }
-    
-    let targetPosition;
-    if (dropIndex >= filteredPosts.length) {
-      targetPosition = newLocalOrder.length;
-    } else {
-      const targetPost = filteredPosts[dropIndex];
-      targetPosition = newLocalOrder.indexOf(targetPost.id);
-      if (targetPosition === -1) targetPosition = dropIndex;
-    }
-    
-    newLocalOrder.splice(targetPosition, 0, sourceId);
-    
-    setLocalOrder(newLocalOrder);
-    localStorage.setItem('localOrder', JSON.stringify(newLocalOrder));
+    console.log(`🔄 DRAG & DROP: "${sourcePost.title}" de position ${draggedIndex} → ${dropIndex}`);
 
-    setTimeout(() => {
-      syncOrderToNotion(newLocalOrder);
-    }, 500);
+    // Calculer la nouvelle date basée sur les posts adjacents
+    const prevPost = dropIndex > 0 ? filteredPosts[dropIndex - 1] : null;
+    const nextPost = dropIndex < filteredPosts.length ? filteredPosts[dropIndex] : null;
+    
+    const newDate = calculateNewDate(prevPost, nextPost);
+    
+    console.log(`📅 Nouvelle date calculée: ${newDate}`);
+    console.log(`📅 Entre: ${prevPost?.date || 'début'} et ${nextPost?.date || 'fin'}`);
+
+    // Synchroniser avec Notion
+    await syncDateToNotion(sourcePost.id, newDate);
 
     setDraggedIndex(null);
   };
@@ -729,32 +694,12 @@ const InstagramNotionWidget = () => {
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                 <button
                   onClick={() => fetchPosts()}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 border-b"
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3"
                 >
                   <RefreshCw size={16} className="text-blue-600" />
                   <div>
                     <div className="text-sm font-medium">Actualiser</div>
                     <div className="text-xs text-gray-500">Récupérer nouveaux posts</div>
-                  </div>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    if (localOrder.length > 0) {
-                      syncOrderToNotion(localOrder);
-                    } else {
-                      showNotification('Aucun ordre à synchroniser', 'info');
-                      setShowRefreshMenu(false);
-                    }
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-600">
-                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                  </svg>
-                  <div>
-                    <div className="text-sm font-medium">Synchroniser</div>
-                    <div className="text-xs text-gray-500">Envoyer l'ordre vers Notion</div>
                   </div>
                 </button>
               </div>
@@ -992,17 +937,19 @@ const InstagramNotionWidget = () => {
                 />
               </div>
 
-              <div className="bg-green-50 p-3 rounded-lg text-xs">
+              <div className="bg-blue-50 p-3 rounded-lg text-xs">
                 <p className="font-medium mb-2">📋 Colonnes Notion requises :</p>
                 <ul className="space-y-1 text-gray-600">
                   <li>• <strong>Couverture</strong> (Files & media) - Vos images/vidéos</li>
                   <li>• <strong>Date</strong> (Date) - Date de publication</li>
                   <li>• <strong>Caption</strong> (Text) - Description</li>
-                  <li>• <strong>Position</strong> (Number) - Ordre (sync auto)</li>
                   <li>• <strong>Compte Instagram</strong> (Select) - Multi-comptes</li>
                 </ul>
-                <p className="text-green-700 mt-2 font-medium">
-                  Le type est détecté automatiquement
+                <p className="text-blue-700 mt-2 font-medium">
+                  ✨ L'ordre est géré automatiquement par les dates !
+                </p>
+                <p className="text-blue-600 mt-1 text-xs">
+                  Déplace un post dans le widget = sa date change automatiquement dans Notion
                 </p>
               </div>
 
