@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { apiKey, databaseId, action, postId, newDate } = req.body;
+    const { apiKey, databaseId, action, postId, newDate, pageId, position } = req.body;
 
     // Validation des paramètres
     if (!apiKey || !databaseId) {
@@ -48,7 +48,52 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // Action de mise à jour d'un post
+    // ========== NOUVELLE ACTION : Mise à jour de la position ==========
+    if (action === 'updatePosition' && (postId || pageId) && position !== undefined) {
+      try {
+        const updateResponse = await fetch(`https://api.notion.com/v1/pages/${postId || pageId}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'Notion-Version': '2022-06-28'
+          },
+          body: JSON.stringify({
+            properties: {
+              "Position": {
+                number: position
+              }
+            }
+          })
+        });
+
+        const updateResult = await updateResponse.json();
+
+        if (updateResponse.ok) {
+          res.status(200).json({
+            success: true,
+            message: `Position ${position} mise à jour`,
+            data: updateResult
+          });
+        } else {
+          res.status(400).json({
+            success: false,
+            error: `Erreur mise à jour position: ${updateResponse.status}`,
+            details: updateResult
+          });
+        }
+        return;
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: "Erreur lors de la mise à jour de la position",
+          details: error.message
+        });
+        return;
+      }
+    }
+
+    // Action de mise à jour d'un post (existant)
     if (action === 'updatePost' && postId && newDate) {
       try {
         const updateResponse = await fetch(`https://api.notion.com/v1/pages/${postId}`, {
@@ -104,6 +149,10 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         sorts: [
           {
+            property: 'Position',
+            direction: 'ascending'
+          },
+          {
             property: 'Date',
             direction: 'descending'
           }
@@ -139,8 +188,9 @@ module.exports = async function handler(req, res) {
                      properties.Name?.title?.[0]?.text?.content ||
                      `Post ${row.id.slice(-6)}`;
 
-        // Extraction des fichiers média - Plus de variantes
-        const contentProperty = properties.Contenu?.files || 
+        // Extraction des fichiers média - ajout de "Couverture"
+        const contentProperty = properties.Couverture?.files ||
+                               properties.Contenu?.files || 
                                properties.Content?.files || 
                                properties.Media?.files || 
                                properties['Files & media']?.files ||
@@ -164,7 +214,7 @@ module.exports = async function handler(req, res) {
                            properties.Publish?.date?.start ||
                            new Date().toISOString().split('T')[0];
 
-        // Extraction du caption - Plus de variantes
+        // Extraction du caption
         const caption = properties.Caption?.rich_text?.[0]?.text?.content ||
                        properties.Description?.rich_text?.[0]?.text?.content ||
                        properties.Text?.rich_text?.[0]?.text?.content ||
@@ -178,12 +228,15 @@ module.exports = async function handler(req, res) {
                     (urls.length > 1 ? 'Carrousel' : 
                      urls.some(url => url.match(/\.(mp4|mov|webm|avi)(\?|$)/i)) ? 'Vidéo' : 'Image');
 
-        // Extraction du compte - Plus de variantes
+        // Extraction du compte
         const account = properties['Compte Instagram']?.select?.name ||
                        properties['Account Instagram']?.select?.name ||
                        properties.Account?.select?.name ||
                        properties.Compte?.select?.name ||
                        properties.Instagram?.select?.name || '';
+
+        // Extraction de la position
+        const position = properties.Position?.number || 0;
 
         return {
           id: row.id,
@@ -192,10 +245,11 @@ module.exports = async function handler(req, res) {
           date: dateProperty,
           caption,
           type,
-          account
+          account,
+          position
         };
       })
-      .filter(post => post.urls.length > 0); // Seulement les posts avec média
+      .filter(post => post.urls.length > 0);
 
     // Extraction des comptes uniques
     const accounts = [...new Set(posts.map(p => p.account).filter(Boolean))];
