@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, Plus } from 'lucide-react';
+import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, Plus, ChevronDown } from 'lucide-react';
 
-// Configuration de l'API
 const API_BASE = 'https://widget-agency-claude.vercel.app/api';
 
-// Détection automatique du type de média
 const detectMediaType = (urls) => {
   if (!urls || urls.length === 0) return 'Image';
   
-  // Vérifier si c'est une vidéo
   const hasVideo = urls.some(url => 
     url.match(/\.(mp4|mov|webm|avi|m4v)(\?|$)/i) ||
     url.includes('video') ||
@@ -20,7 +17,6 @@ const detectMediaType = (urls) => {
   return 'Image';
 };
 
-// Composant pour afficher les médias
 const MediaDisplay = ({ urls, type, caption }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   
@@ -35,12 +31,10 @@ const MediaDisplay = ({ urls, type, caption }) => {
   const detectedType = detectMediaType(urls);
   const isVideo = detectedType === 'Vidéo';
   const isCarousel = urls.length > 1;
-
   const currentUrl = urls[currentIndex];
 
   return (
     <div className="relative w-full h-full group">
-      {/* Media principal */}
       {currentUrl && currentUrl.match(/\.(mp4|mov|webm|avi|m4v)(\?|$)/i) ? (
         <video
           src={currentUrl}
@@ -62,7 +56,6 @@ const MediaDisplay = ({ urls, type, caption }) => {
         />
       )}
 
-      {/* Icône carrousel */}
       {isCarousel && (
         <div className="absolute top-2 right-2 text-white drop-shadow-lg z-10">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -73,14 +66,12 @@ const MediaDisplay = ({ urls, type, caption }) => {
         </div>
       )}
       
-      {/* Icône vidéo */}
       {isVideo && (
         <div className="absolute top-2 right-2 text-white drop-shadow-lg z-10">
           <Play size={16} fill="white" stroke="white" />
         </div>
       )}
 
-      {/* Navigation carrousel */}
       {isCarousel && (
         <>
           <button
@@ -105,7 +96,6 @@ const MediaDisplay = ({ urls, type, caption }) => {
             <ChevronRight size={16} className="mx-auto" />
           </button>
 
-          {/* Points de navigation */}
           <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-1.5 z-10">
             {urls.map((_, index) => (
               <button
@@ -123,7 +113,6 @@ const MediaDisplay = ({ urls, type, caption }) => {
         </>
       )}
 
-      {/* Overlay avec caption */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ height: '40px' }}>
         <div className="absolute bottom-1 left-2 right-2 text-white text-xs font-medium truncate">
           {caption || 'Cliquer pour voir en détail'}
@@ -133,7 +122,6 @@ const MediaDisplay = ({ urls, type, caption }) => {
   );
 };
 
-// Composant Modal détaillée
 const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -243,7 +231,6 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
   );
 };
 
-// Composant principal
 const InstagramNotionWidget = () => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isProfileEdit, setIsProfileEdit] = useState(false);
@@ -253,6 +240,9 @@ const InstagramNotionWidget = () => {
   const [selectedPost, setSelectedPost] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [showRefreshMenu, setShowRefreshMenu] = useState(false);
 
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -276,6 +266,13 @@ const InstagramNotionWidget = () => {
       following: '567'
     }
   });
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => {
+      setNotification(null);
+    }, 3000);
+  };
 
   useEffect(() => {
     const savedApiKey = localStorage.getItem('notionApiKey');
@@ -327,6 +324,9 @@ const InstagramNotionWidget = () => {
   }, []);
 
   const fetchPosts = async (apiKey = notionApiKey, dbId = databaseId) => {
+    setIsRefreshing(true);
+    setShowRefreshMenu(false);
+    
     try {
       const response = await fetch(`${API_BASE}/notion`, {
         method: 'POST',
@@ -342,6 +342,7 @@ const InstagramNotionWidget = () => {
       const data = await response.json();
 
       if (data.success) {
+        const oldCount = posts.length;
         setPosts(data.posts);
         
         if (localOrder.length === 0) {
@@ -355,6 +356,10 @@ const InstagramNotionWidget = () => {
           const initialOrder = sortedForInit.map(post => post.id);
           setLocalOrder(initialOrder);
           localStorage.setItem('localOrder', JSON.stringify(initialOrder));
+          
+          if (data.posts.length > 0) {
+            showNotification(`${data.posts.length} posts chargés`, 'success');
+          }
         } else {
           const existingIds = new Set(localOrder);
           const newPosts = data.posts.filter(post => !existingIds.has(post.id));
@@ -363,43 +368,43 @@ const InstagramNotionWidget = () => {
             const updatedOrder = [...localOrder, ...newPosts.map(post => post.id)];
             setLocalOrder(updatedOrder);
             localStorage.setItem('localOrder', JSON.stringify(updatedOrder));
+            
+            showNotification(`${newPosts.length} nouveau(x) post(s) ajouté(s)`, 'success');
+          } else {
+            showNotification('Feed à jour', 'info');
           }
         }
         
         setIsConfigOpen(false);
       } else {
         console.error('Erreur Notion:', data.error);
+        showNotification(`Erreur: ${data.error}`, 'error');
       }
     } catch (error) {
-      console.error('❌ Erreur fetch:', error);
+      console.error('Erreur fetch:', error);
+      showNotification('Erreur de connexion', 'error');
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 500);
     }
   };
 
-  const connectToNotion = async () => {
-    if (!notionApiKey || !databaseId) {
-      return;
-    }
-
-    localStorage.setItem('notionApiKey', notionApiKey);
-    localStorage.setItem('databaseId', databaseId);
-    
-    await fetchPosts();
-  };
-
-  // Synchroniser l'ordre avec Notion automatiquement
   const syncOrderToNotion = async (newOrder) => {
     if (isSyncing) return;
     
     setIsSyncing(true);
-    console.log('🔄 Synchronisation avec Notion...');
+    setShowRefreshMenu(false);
+    console.log('🔄 Synchronisation avec Notion en cours...');
 
     try {
-      // Mettre à jour chaque post avec sa nouvelle position
       for (let i = 0; i < newOrder.length; i++) {
         const postId = newOrder[i];
         const position = i + 1;
         
-        await fetch(`${API_BASE}/notion/update-position`, {
+        console.log(`Mise à jour position ${position} pour post ${postId}`);
+        
+        const response = await fetch(`${API_BASE}/notion`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -407,21 +412,42 @@ const InstagramNotionWidget = () => {
           body: JSON.stringify({
             apiKey: notionApiKey,
             databaseId: databaseId,
+            action: 'updatePosition',
             pageId: postId,
             position: position,
           }),
         });
         
-        // Petit délai pour éviter de surcharger l'API
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const result = await response.json();
+        
+        if (!result.success) {
+          console.error(`Erreur pour post ${postId}:`, result.error);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
       
       console.log('✅ Synchronisation Notion terminée !');
+      showNotification('Ordre synchronisé avec Notion', 'success');
+      
     } catch (error) {
-      console.error('❌ Erreur synchronisation Notion:', error);
+      console.error('Erreur synchronisation:', error);
+      showNotification('Erreur lors de la synchronisation', 'error');
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const connectToNotion = async () => {
+    if (!notionApiKey || !databaseId) {
+      showNotification('Veuillez remplir tous les champs', 'error');
+      return;
+    }
+
+    localStorage.setItem('notionApiKey', notionApiKey);
+    localStorage.setItem('databaseId', databaseId);
+    
+    await fetchPosts();
   };
 
   const getProfile = (account) => {
@@ -578,14 +604,12 @@ const InstagramNotionWidget = () => {
   const filteredPosts = getOrderedFilteredPosts();
 
   const handleDragStart = (e, index) => {
-    console.log(`🎯 Début drag: index ${index}`);
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', index.toString());
   };
 
   const handleDragEnd = (e) => {
-    console.log('🏁 Fin drag');
     setDraggedIndex(null);
     setDragOverIndex(null);
   };
@@ -618,19 +642,15 @@ const InstagramNotionWidget = () => {
     setDragOverIndex(null);
 
     if (draggedIndex === null || draggedIndex === dropIndex) {
-      console.log('❌ Drag annulé');
       setDraggedIndex(null);
       return;
     }
 
     const sourcePost = filteredPosts[draggedIndex];
     if (!sourcePost) {
-      console.log('❌ Post source introuvable');
       setDraggedIndex(null);
       return;
     }
-
-    console.log(`🔄 DRAG & DROP: "${sourcePost.title}" de ${draggedIndex} → ${dropIndex}`);
 
     const newLocalOrder = [...localOrder];
     const sourceId = sourcePost.id;
@@ -653,10 +673,7 @@ const InstagramNotionWidget = () => {
     
     setLocalOrder(newLocalOrder);
     localStorage.setItem('localOrder', JSON.stringify(newLocalOrder));
-    
-    console.log('✅ Ordre mis à jour instantanément !');
 
-    // Synchroniser automatiquement avec Notion
     setTimeout(() => {
       syncOrderToNotion(newLocalOrder);
     }, 500);
@@ -664,7 +681,6 @@ const InstagramNotionWidget = () => {
     setDraggedIndex(null);
   };
 
-  // Grille 3x20 = 60 posts
   const gridItems = Array.from({ length: 60 }, (_, index) => {
     const post = filteredPosts[index];
     return post || null;
@@ -676,23 +692,75 @@ const InstagramNotionWidget = () => {
 
   return (
     <div className="w-full max-w-md mx-auto bg-white">
-      {/* Header Instagram */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center space-x-3">
           <Camera size={24} className="text-gray-800" />
           <span className="font-semibold text-lg text-gray-800">Instagram</span>
         </div>
         <div className="flex items-center space-x-2">
-          {isSyncing && (
-            <div className="text-xs text-blue-600 animate-pulse">Sync...</div>
+          {(isSyncing || isRefreshing) && (
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+              <span className="text-xs text-blue-600">
+                {isSyncing ? 'Sync...' : 'Chargement...'}
+              </span>
+            </div>
           )}
-          <button
-            onClick={() => fetchPosts()}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-            title="Actualiser"
-          >
-            <RefreshCw size={20} className="text-gray-700" />
-          </button>
+          
+          <div className="relative">
+            <button
+              onClick={() => setShowRefreshMenu(!showRefreshMenu)}
+              disabled={isRefreshing || isSyncing}
+              className={`flex items-center space-x-1 p-2 hover:bg-gray-100 rounded-full transition-all ${
+                (isRefreshing || isSyncing) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              title="Options d'actualisation"
+            >
+              <RefreshCw 
+                size={20} 
+                className={`text-gray-700 transition-transform ${
+                  (isRefreshing || isSyncing) ? 'animate-spin' : ''
+                }`}
+              />
+              <ChevronDown size={14} className="text-gray-700" />
+            </button>
+
+            {showRefreshMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <button
+                  onClick={() => fetchPosts()}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 border-b"
+                >
+                  <RefreshCw size={16} className="text-blue-600" />
+                  <div>
+                    <div className="text-sm font-medium">Actualiser</div>
+                    <div className="text-xs text-gray-500">Récupérer nouveaux posts</div>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    if (localOrder.length > 0) {
+                      syncOrderToNotion(localOrder);
+                    } else {
+                      showNotification('Aucun ordre à synchroniser', 'info');
+                      setShowRefreshMenu(false);
+                    }
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-600">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                  </svg>
+                  <div>
+                    <div className="text-sm font-medium">Synchroniser</div>
+                    <div className="text-xs text-gray-500">Envoyer l'ordre vers Notion</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+          
           <button
             onClick={() => setIsConfigOpen(true)}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -703,7 +771,13 @@ const InstagramNotionWidget = () => {
         </div>
       </div>
 
-      {/* Profil Instagram */}
+      {showRefreshMenu && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setShowRefreshMenu(false)}
+        />
+      )}
+
       <div className="p-4">
         <div className="flex items-center space-x-4 mb-4">
           <div 
@@ -767,7 +841,6 @@ const InstagramNotionWidget = () => {
         </div>
       </div>
 
-      {/* Onglets comptes */}
       {shouldShowTabs && (
         <div className="flex items-center space-x-2 px-4 mb-4 overflow-x-auto">
           {shouldShowAllTab && (
@@ -809,7 +882,6 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Bouton gérer les comptes */}
       <div className="flex justify-center px-4 mb-4">
         <button
           onClick={() => setIsAccountManager(true)}
@@ -821,7 +893,6 @@ const InstagramNotionWidget = () => {
         </button>
       </div>
 
-      {/* Grille 3x20 = 60 posts */}
       <div className="grid grid-cols-3 gap-1 p-4">
         {gridItems.map((post, index) => (
           <div
@@ -884,7 +955,6 @@ const InstagramNotionWidget = () => {
         ))}
       </div>
 
-      {/* Configuration Modal */}
       {isConfigOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -928,11 +998,11 @@ const InstagramNotionWidget = () => {
                   <li>• <strong>Couverture</strong> (Files & media) - Vos images/vidéos</li>
                   <li>• <strong>Date</strong> (Date) - Date de publication</li>
                   <li>• <strong>Caption</strong> (Text) - Description</li>
-                  <li>• <strong>Position</strong> (Number) - Ordre (sync auto) ⚡</li>
+                  <li>• <strong>Position</strong> (Number) - Ordre (sync auto)</li>
                   <li>• <strong>Compte Instagram</strong> (Select) - Multi-comptes</li>
                 </ul>
                 <p className="text-green-700 mt-2 font-medium">
-                  💡 Le type (Image/Carrousel/Vidéo) est détecté automatiquement
+                  Le type est détecté automatiquement
                 </p>
               </div>
 
@@ -947,7 +1017,6 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Gestion des comptes */}
       {isAccountManager && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1096,7 +1165,7 @@ const InstagramNotionWidget = () => {
                         onClick={removeAllAccounts}
                         className="w-full text-sm text-red-600 hover:text-red-800 hover:bg-red-50 py-2 px-3 rounded-lg transition-colors"
                       >
-                        🗑️ Supprimer tous les comptes
+                        Supprimer tous les comptes
                       </button>
                     </div>
                   )}
@@ -1107,7 +1176,6 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Edition du profil */}
       {isProfileEdit && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1130,7 +1198,6 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-      {/* Modal d'affichage détaillé */}
       <PostModal
         post={selectedPost}
         isOpen={modalOpen}
@@ -1150,7 +1217,6 @@ const InstagramNotionWidget = () => {
         }}
       />
 
-      {/* Filigrane */}
       <div className="border-t bg-gray-50 py-3">
         <div className="text-center">
           <a
@@ -1163,11 +1229,42 @@ const InstagramNotionWidget = () => {
           </a>
         </div>
       </div>
+
+      {notification && (
+        <div 
+          className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg transition-all duration-300 ${
+            notification.type === 'success' ? 'bg-green-500' :
+            notification.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+          } text-white font-medium`}
+          style={{
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <div className="flex items-center space-x-2">
+            {notification.type === 'success' && <span>✓</span>}
+            {notification.type === 'error' && <span>✕</span>}
+            {notification.type === 'info' && <span>ℹ</span>}
+            <span>{notification.message}</span>
+          </div>
+        </div>
+      )}
+      
+      <style jsx>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(400px);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 };
 
-// Composant pour éditer le profil
 const ProfileEditForm = ({ profile, onSave, onCancel }) => {
   const [formData, setFormData] = useState(profile);
 
