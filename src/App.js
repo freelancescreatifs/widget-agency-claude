@@ -5,7 +5,7 @@ const API_BASE = 'https://freelance-creatif.vercel.app/api';
 
 // GÉNÉRATION D'UN ID UNIQUE PAR WIDGET
 const generateWidgetId = () => {
-  return 'widget_' + Math.random().toString(36).substring(2, 15);
+  return 'widget_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now();
 };
 
 const detectMediaType = (urls) => {
@@ -237,13 +237,9 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
 };
 
 const InstagramNotionWidget = () => {
-  // ID UNIQUE DU WIDGET
+  // ID UNIQUE DU WIDGET - Généré une seule fois par instance (sans sessionStorage partagé)
   const [widgetId] = useState(() => {
-    const stored = sessionStorage.getItem('currentWidgetId');
-    if (stored) return stored;
-    const newId = generateWidgetId();
-    sessionStorage.setItem('currentWidgetId', newId);
-    return newId;
+    return generateWidgetId();
   });
 
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -351,7 +347,7 @@ const InstagramNotionWidget = () => {
 
   // Charger au démarrage
   useEffect(() => {
-    console.log(`🆔 Widget ID: ${widgetId}`);
+    console.log(`🆔 Widget ID unique: ${widgetId}`);
     const loaded = loadWorkspaceConfig(widgetId);
     
     if (!loaded) {
@@ -365,7 +361,7 @@ const InstagramNotionWidget = () => {
     if (notionApiKey && databaseId) {
       saveWorkspaceConfig();
     }
-  }, [notionApiKey, databaseId, profiles, accounts, showAllTab]);
+  }, [notionApiKey, databaseId, profiles, accounts, showAllTab, workspaceName]);
 
   const fetchPosts = async (apiKey = notionApiKey, dbId = databaseId) => {
     setIsRefreshing(true);
