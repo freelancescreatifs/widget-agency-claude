@@ -3,17 +3,6 @@ import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play,
 
 const API_BASE = 'https://freelance-creatif.vercel.app/api';
 
-// NAMESPACE GLOBAL UNIQUE PAR SESSION
-const SESSION_NAMESPACE = (() => {
-  const key = 'instagram_widget_session_ns';
-  let namespace = sessionStorage.getItem(key);
-  if (!namespace) {
-    namespace = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-    sessionStorage.setItem(key, namespace);
-  }
-  return namespace;
-})();
-
 // GÉNÉRATION D'UN ID UNIQUE PAR WIDGET
 const generateWidgetId = () => {
   // Utilisation de crypto.randomUUID si disponible, sinon fallback avec plus d'entropie
@@ -259,19 +248,23 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
 };
 
 const InstagramNotionWidget = ({ widgetKey = null }) => {
-  // ID UNIQUE DU WIDGET - Utilisation de useRef pour éviter les re-renders et le partage d'état
-  const widgetIdRef = useRef(null);
+  // NAMESPACE UNIQUE PAR INSTANCE DE WIDGET (pas par session)
+  const widgetNamespace = useRef(null);
   
-  // Générer l'ID de manière synchrone et l'assigner immédiatement
-  if (!widgetIdRef.current) {
-    // Créer un ID vraiment unique avec plus d'entropie
+  if (!widgetNamespace.current) {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 15);
-    const extra = Math.random().toString(36).substring(2, 10);
-    const performance_now = typeof performance !== 'undefined' ? performance.now().toString(36).replace('.', '') : '';
-    
-    widgetIdRef.current = `widget_${timestamp}_${random}_${extra}_${performance_now}_${Date.now()}`;
-    console.log(`🆔 Widget créé avec ID unique: ${widgetIdRef.current}`);
+    const extraRandom = Math.random().toString(36).substring(2, 10);
+    widgetNamespace.current = `widget_ns_${timestamp}_${random}_${extraRandom}`;
+    console.log(`🏷️ Namespace unique créé: ${widgetNamespace.current}`);
+  }
+
+  // ID UNIQUE DU WIDGET basé sur le namespace
+  const widgetIdRef = useRef(null);
+  
+  if (!widgetIdRef.current) {
+    widgetIdRef.current = `${widgetNamespace.current}_instance`;
+    console.log(`🆔 Widget ID unique: ${widgetIdRef.current}`);
   }
   
   const widgetId = widgetIdRef.current;
@@ -319,22 +312,17 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
     }, 3000);
   };
 
-  // Charger la configuration du workspace avec namespace isolé
+  // Charger la configuration du workspace avec namespace isolé par instance
   const loadWorkspaceConfig = (workspaceId) => {
     try {
-      const configKey = `${SESSION_NAMESPACE}_workspace_${workspaceId}`;
+      const configKey = `config_${widgetNamespace.current}`;
       const savedConfig = localStorage.getItem(configKey);
       
-      console.log(`🔍 Tentative de chargement: ${configKey}`);
+      console.log(`🔍 [${widgetNamespace.current}] Chargement config: ${configKey}`);
       
       if (savedConfig) {
         const config = JSON.parse(savedConfig);
-        console.log(`🔑 Configuration trouvée pour: ${workspaceId}`, config);
-        
-        // Vérifier la cohérence de l'ID
-        if (config.widgetId && config.widgetId !== workspaceId) {
-          console.warn(`⚠️ Incohérence d'ID détectée. Config: ${config.widgetId}, Demandé: ${workspaceId}`);
-        }
+        console.log(`🔑 [${widgetNamespace.current}] Configuration trouvée:`, config);
         
         setNotionApiKey(config.apiKey || '');
         setDatabaseId(config.databaseId || '');
@@ -350,25 +338,25 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
         return true;
       }
       
-      console.log(`📝 Aucune configuration trouvée pour: ${workspaceId}`);
+      console.log(`📝 [${widgetNamespace.current}] Aucune configuration trouvée - nouveau widget`);
       return false;
     } catch (e) {
-      console.error('❌ Erreur chargement workspace:', e);
+      console.error(`❌ [${widgetNamespace.current}] Erreur chargement:`, e);
       return false;
     }
   };
 
-  // Sauvegarder la configuration du workspace avec namespace isolé
+  // Sauvegarder la configuration du workspace avec isolation complète
   const saveWorkspaceConfig = () => {
-    if (!widgetId) {
-      console.warn('⚠️ Tentative de sauvegarde sans widgetId');
+    if (!widgetId || !widgetNamespace.current) {
+      console.warn('⚠️ Tentative de sauvegarde sans ID/namespace');
       return;
     }
     
-    const configKey = `${SESSION_NAMESPACE}_workspace_${widgetId}`;
+    const configKey = `config_${widgetNamespace.current}`;
     const config = {
-      widgetId: widgetId, // Ajouter l'ID dans la config pour vérification
-      namespace: SESSION_NAMESPACE, // Ajouter le namespace pour debug
+      widgetId: widgetId,
+      namespace: widgetNamespace.current,
       name: workspaceName || databaseId?.substring(0, 8) || 'Widget',
       apiKey: notionApiKey,
       databaseId: databaseId,
@@ -378,70 +366,30 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
       lastUpdate: new Date().toISOString()
     };
     
-    console.log(`💾 Sauvegarde avec clé: ${configKey}`, config);
-    
-    // Vérifier les conflits
-    const existingConfig = localStorage.getItem(configKey);
-    if (existingConfig) {
-      try {
-        const parsed = JSON.parse(existingConfig);
-        if (parsed.widgetId && parsed.widgetId !== widgetId) {
-          console.error(`❌ CONFLIT D'ID! Config existante: ${parsed.widgetId}, Nouveau: ${widgetId}`);
-          console.error(`❌ Clé utilisée: ${configKey}`);
-        }
-      } catch (e) {
-        console.warn('⚠️ Config existante corrompue, écrasement');
-      }
-    }
-    
+    console.log(`💾 [${widgetNamespace.current}] Sauvegarde:`, configKey, config);
     localStorage.setItem(configKey, JSON.stringify(config));
     
-    // Mettre à jour la liste des workspaces avec namespace
-    try {
-      const workspacesListKey = `${SESSION_NAMESPACE}_workspaces_list`;
-      const workspacesList = JSON.parse(localStorage.getItem(workspacesListKey) || '[]');
-      const existingIndex = workspacesList.findIndex(w => w.id === widgetId);
-      
-      const workspaceEntry = {
-        id: widgetId,
-        name: config.name,
-        databaseId: databaseId,
-        namespace: SESSION_NAMESPACE,
-        created: existingIndex === -1 ? new Date().toISOString() : workspacesList[existingIndex].created
-      };
-      
-      if (existingIndex === -1) {
-        workspacesList.push(workspaceEntry);
-        console.log(`➕ Nouveau workspace ajouté: ${widgetId} dans ${SESSION_NAMESPACE}`);
-      } else {
-        workspacesList[existingIndex] = workspaceEntry;
-        console.log(`🔄 Workspace mis à jour: ${widgetId} dans ${SESSION_NAMESPACE}`);
-      }
-      
-      localStorage.setItem(workspacesListKey, JSON.stringify(workspacesList));
-    } catch (e) {
-      console.error('❌ Erreur lors de la mise à jour de la liste des workspaces:', e);
-    }
+    // Pas de liste globale - chaque widget est complètement isolé
   };
 
   // Charger au démarrage
   useEffect(() => {
-    console.log(`🆔 Widget ID unique: ${widgetId} dans namespace: ${SESSION_NAMESPACE}`);
+    console.log(`🆔 [${widgetNamespace.current}] Widget chargé avec namespace unique`);
     const loaded = loadWorkspaceConfig(widgetId);
     
     if (!loaded) {
-      console.log('📝 Nouveau widget, configuration vide');
+      console.log(`📝 [${widgetNamespace.current}] Nouveau widget, configuration vide`);
       setIsConfigOpen(true);
     }
   }, [widgetId]);
 
   // Sauvegarder automatiquement à chaque changement (avec délai pour éviter les race conditions)
   useEffect(() => {
-    if (notionApiKey && databaseId && widgetId) {
+    if (notionApiKey && databaseId && widgetId && widgetNamespace.current) {
       const timeoutId = setTimeout(() => {
-        console.log(`⏱️ Sauvegarde automatique pour widget: ${widgetId}`);
+        console.log(`⏱️ [${widgetNamespace.current}] Sauvegarde automatique`);
         saveWorkspaceConfig();
-      }, 500); // Délai de 500ms pour éviter les sauvegardes trop fréquentes
+      }, 500);
       
       return () => clearTimeout(timeoutId);
     }
@@ -768,15 +716,7 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
   const shouldShowTabs = accounts.length > 0;
   const shouldShowAllTab = accounts.length > 1 && showAllTab;
 
-  // Liste des workspaces disponibles
-  const getWorkspacesList = () => {
-    try {
-      const workspacesListKey = `${SESSION_NAMESPACE}_workspaces_list`;
-      return JSON.parse(localStorage.getItem(workspacesListKey) || '[]');
-    } catch {
-      return [];
-    }
-  };
+  // Chaque widget est maintenant complètement isolé - pas de liste globale
 
   return (
     <div className="w-full max-w-md mx-auto bg-white">
@@ -1042,13 +982,16 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
               <div className="bg-green-50 p-3 rounded-lg text-sm">
                 <div className="flex items-center space-x-2 mb-2">
                   <Layers size={16} className="text-green-600" />
-                  <span className="font-medium text-green-800">Widget isolé</span>
+                  <span className="font-medium text-green-800">Widget complètement isolé</span>
                 </div>
                 <p className="text-green-700 text-xs">
-                  Ce widget est indépendant. Vous pouvez en avoir plusieurs avec des bases Notion différentes sur la même page !
+                  Ce widget est totalement indépendant. Chaque instance a son propre espace de stockage unique !
                 </p>
                 <p className="text-green-600 text-xs mt-1">
-                  ID: {widgetId.substring(7, 15)}...
+                  Namespace: {widgetNamespace.current?.substring(10, 25)}...
+                </p>
+                <p className="text-green-600 text-xs">
+                  ID: {widgetId?.substring(widgetNamespace.current?.length + 1, widgetNamespace.current?.length + 15)}...
                 </p>
               </div>
 
