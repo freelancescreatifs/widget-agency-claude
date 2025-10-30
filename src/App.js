@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, Plus, ChevronDown, Layers } from 'lucide-react';
+import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, Plus, ChevronDown } from 'lucide-react';
 
 const API_BASE = 'https://freelance-creatif.vercel.app/api';
-
-// GÉNÉRATION D'UN ID UNIQUE PAR WIDGET
-const generateWidgetId = () => {
-  return 'widget_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now();
-};
 
 const detectMediaType = (urls) => {
   if (!urls || urls.length === 0) return 'Image';
@@ -237,16 +232,10 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
 };
 
 const InstagramNotionWidget = () => {
-  // ID UNIQUE DU WIDGET - Généré une seule fois par instance (sans sessionStorage partagé)
-  const [widgetId] = useState(() => {
-    return generateWidgetId();
-  });
-
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isProfileEdit, setIsProfileEdit] = useState(false);
   const [notionApiKey, setNotionApiKey] = useState('');
   const [databaseId, setDatabaseId] = useState('');
-  const [workspaceName, setWorkspaceName] = useState('');
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -254,7 +243,6 @@ const InstagramNotionWidget = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notification, setNotification] = useState(null);
   const [showRefreshMenu, setShowRefreshMenu] = useState(false);
-  const [showWorkspaceSelector, setShowWorkspaceSelector] = useState(false);
 
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -285,83 +273,45 @@ const InstagramNotionWidget = () => {
     }, 3000);
   };
 
-  // Charger la configuration du workspace
-  const loadWorkspaceConfig = (workspaceId) => {
-    try {
-      const configKey = `workspace_${workspaceId}`;
-      const savedConfig = localStorage.getItem(configKey);
-      
-      if (savedConfig) {
-        const config = JSON.parse(savedConfig);
-        console.log(`🔑 Chargement workspace: ${workspaceId}`, config);
-        
-        setNotionApiKey(config.apiKey || '');
-        setDatabaseId(config.databaseId || '');
-        setWorkspaceName(config.name || '');
-        setProfiles(config.profiles || profiles);
-        setAccounts(config.accounts || []);
-        setShowAllTab(config.showAllTab !== undefined ? config.showAllTab : true);
-        
-        if (config.apiKey && config.databaseId) {
-          fetchPosts(config.apiKey, config.databaseId);
-        }
-        
-        return true;
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('notionApiKey');
+    const savedDbId = localStorage.getItem('databaseId');
+    const savedProfiles = localStorage.getItem('instagramProfiles');
+    const savedAccounts = localStorage.getItem('instagramAccounts');
+    const savedShowAllTab = localStorage.getItem('showAllTab');
+    
+    if (savedApiKey) setNotionApiKey(savedApiKey);
+    if (savedDbId) setDatabaseId(savedDbId);
+    
+    if (savedProfiles) {
+      try {
+        setProfiles(JSON.parse(savedProfiles));
+      } catch (e) {
+        console.error('Erreur parsing profiles:', e);
       }
-      return false;
-    } catch (e) {
-      console.error('Erreur chargement workspace:', e);
-      return false;
     }
-  };
+    
+    if (savedShowAllTab !== null) {
+      setShowAllTab(savedShowAllTab === 'true');
+    }
+    
+    if (savedAccounts) {
+      try {
+        const accounts = JSON.parse(savedAccounts);
+        setAccounts(accounts);
+        if (accounts.length > 0) {
+          setActiveAccount(accounts[0]);
+        }
+      } catch (e) {
+        console.error('Erreur parsing accounts:', e);
+        setAccounts([]);
+      }
+    }
 
-  // Sauvegarder la configuration du workspace
-  const saveWorkspaceConfig = () => {
-    if (!widgetId) return;
-    
-    const configKey = `workspace_${widgetId}`;
-    const config = {
-      name: workspaceName || databaseId?.substring(0, 8) || 'Widget',
-      apiKey: notionApiKey,
-      databaseId: databaseId,
-      profiles: profiles,
-      accounts: accounts,
-      showAllTab: showAllTab,
-      lastUpdate: new Date().toISOString()
-    };
-    
-    localStorage.setItem(configKey, JSON.stringify(config));
-    console.log(`💾 Sauvegarde workspace: ${widgetId}`, config);
-    
-    // Ajouter à la liste des workspaces
-    const workspacesList = JSON.parse(localStorage.getItem('workspaces_list') || '[]');
-    if (!workspacesList.find(w => w.id === widgetId)) {
-      workspacesList.push({
-        id: widgetId,
-        name: config.name,
-        databaseId: databaseId
-      });
-      localStorage.setItem('workspaces_list', JSON.stringify(workspacesList));
+    if (savedApiKey && savedDbId) {
+      fetchPosts(savedApiKey, savedDbId);
     }
-  };
-
-  // Charger au démarrage
-  useEffect(() => {
-    console.log(`🆔 Widget ID unique: ${widgetId}`);
-    const loaded = loadWorkspaceConfig(widgetId);
-    
-    if (!loaded) {
-      console.log('📝 Nouveau widget, configuration vide');
-      setIsConfigOpen(true);
-    }
-  }, [widgetId]);
-
-  // Sauvegarder automatiquement à chaque changement
-  useEffect(() => {
-    if (notionApiKey && databaseId) {
-      saveWorkspaceConfig();
-    }
-  }, [notionApiKey, databaseId, profiles, accounts, showAllTab, workspaceName]);
+  }, []);
 
   const fetchPosts = async (apiKey = notionApiKey, dbId = databaseId) => {
     setIsRefreshing(true);
@@ -410,6 +360,7 @@ const InstagramNotionWidget = () => {
     }
   };
 
+  // Calculer une nouvelle date entre deux posts
   const calculateNewDate = (prevPost, nextPost) => {
     const now = new Date();
     
@@ -436,6 +387,7 @@ const InstagramNotionWidget = () => {
     return new Date(middleTime).toISOString().split('T')[0];
   };
 
+  // Synchroniser la nouvelle date avec Notion
   const syncDateToNotion = async (postId, newDate) => {
     if (isSyncing) return;
     
@@ -485,7 +437,9 @@ const InstagramNotionWidget = () => {
       return;
     }
 
-    saveWorkspaceConfig();
+    localStorage.setItem('notionApiKey', notionApiKey);
+    localStorage.setItem('databaseId', databaseId);
+    
     await fetchPosts();
   };
 
@@ -506,10 +460,12 @@ const InstagramNotionWidget = () => {
   const saveProfile = (account, profileData) => {
     const newProfiles = { ...profiles, [account]: profileData };
     setProfiles(newProfiles);
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
   const hideAllTab = () => {
     setShowAllTab(false);
+    localStorage.setItem('showAllTab', 'false');
     if (activeAccount === 'All' && accounts.length > 0) {
       setActiveAccount(accounts[0]);
     }
@@ -536,6 +492,9 @@ const InstagramNotionWidget = () => {
     const newProfiles = { ...profiles, [newAccount]: newProfile };
     setProfiles(newProfiles);
     
+    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    
     setActiveAccount(newAccount);
     setNewAccountName('');
     setIsAccountManager(false);
@@ -551,12 +510,16 @@ const InstagramNotionWidget = () => {
       } else {
         setActiveAccount('All');
         setShowAllTab(true);
+        localStorage.setItem('showAllTab', 'true');
       }
     }
     
     const newProfiles = { ...profiles };
     delete newProfiles[accountToRemove];
     setProfiles(newProfiles);
+    
+    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
   const removeAllAccounts = () => {
@@ -566,6 +529,8 @@ const InstagramNotionWidget = () => {
     const newProfiles = { 'All': profiles['All'] || getProfile('All') };
     setProfiles(newProfiles);
     
+    localStorage.setItem('instagramAccounts', JSON.stringify([]));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
     setIsAccountManager(false);
   };
 
@@ -592,10 +557,14 @@ const InstagramNotionWidget = () => {
       setProfiles(newProfiles);
     }
     
+    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    
     setEditingAccount(null);
     setEditAccountName('');
   };
 
+  // Filtrer et trier les posts par date (chronologique inversé = plus récent en premier)
   const getOrderedFilteredPosts = () => {
     const accountFiltered = posts.filter(post => {
       if (activeAccount === 'All' || accounts.length === 0) {
@@ -662,6 +631,7 @@ const InstagramNotionWidget = () => {
 
     console.log(`🔄 DRAG & DROP: "${sourcePost.title}" de position ${draggedIndex} → ${dropIndex}`);
 
+    // Calculer la nouvelle date basée sur les posts adjacents
     const prevPost = dropIndex > 0 ? filteredPosts[dropIndex - 1] : null;
     const nextPost = dropIndex < filteredPosts.length ? filteredPosts[dropIndex] : null;
     
@@ -670,6 +640,7 @@ const InstagramNotionWidget = () => {
     console.log(`📅 Nouvelle date calculée: ${newDate}`);
     console.log(`📅 Entre: ${prevPost?.date || 'début'} et ${nextPost?.date || 'fin'}`);
 
+    // Synchroniser avec Notion
     await syncDateToNotion(sourcePost.id, newDate);
 
     setDraggedIndex(null);
@@ -684,26 +655,12 @@ const InstagramNotionWidget = () => {
   const shouldShowTabs = accounts.length > 0;
   const shouldShowAllTab = accounts.length > 1 && showAllTab;
 
-  // Liste des workspaces disponibles
-  const getWorkspacesList = () => {
-    try {
-      return JSON.parse(localStorage.getItem('workspaces_list') || '[]');
-    } catch {
-      return [];
-    }
-  };
-
   return (
     <div className="w-full max-w-md mx-auto bg-white">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center space-x-3">
           <Camera size={24} className="text-gray-800" />
           <span className="font-semibold text-lg text-gray-800">Instagram</span>
-          {workspaceName && (
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-              {workspaceName}
-            </span>
-          )}
         </div>
         <div className="flex items-center space-x-2">
           {(isSyncing || isRefreshing) && (
@@ -954,32 +911,6 @@ const InstagramNotionWidget = () => {
             </div>
 
             <div className="space-y-4">
-              <div className="bg-green-50 p-3 rounded-lg text-sm">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Layers size={16} className="text-green-600" />
-                  <span className="font-medium text-green-800">Widget isolé</span>
-                </div>
-                <p className="text-green-700 text-xs">
-                  Ce widget est indépendant. Vous pouvez en avoir plusieurs avec des bases Notion différentes sur la même page !
-                </p>
-                <p className="text-green-600 text-xs mt-1">
-                  ID: {widgetId.substring(7, 15)}...
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Nom du workspace (optionnel)
-                </label>
-                <input
-                  type="text"
-                  value={workspaceName}
-                  onChange={(e) => setWorkspaceName(e.target.value)}
-                  placeholder="Ex: Business, Personnel..."
-                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Clé API Notion
@@ -1014,6 +945,12 @@ const InstagramNotionWidget = () => {
                   <li>• <strong>Caption</strong> (Text) - Description</li>
                   <li>• <strong>Compte Instagram</strong> (Select) - Multi-comptes</li>
                 </ul>
+                <p className="text-blue-700 mt-2 font-medium">
+                  ✨ L'ordre est géré automatiquement par les dates !
+                </p>
+                <p className="text-blue-600 mt-1 text-xs">
+                  Déplace un post dans le widget = sa date change automatiquement dans Notion
+                </p>
               </div>
 
               <button
@@ -1027,7 +964,7 @@ const InstagramNotionWidget = () => {
         </div>
       )}
 
-{isAccountManager && (
+      {isAccountManager && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
