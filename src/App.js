@@ -273,39 +273,46 @@ const InstagramNotionWidget = () => {
     }, 3000);
   };
 
+  // MODIFICATION 1: Charger avec clés isolées par databaseId
   useEffect(() => {
     const savedApiKey = localStorage.getItem('notionApiKey');
     const savedDbId = localStorage.getItem('databaseId');
-    const savedProfiles = localStorage.getItem('instagramProfiles');
-    const savedAccounts = localStorage.getItem('instagramAccounts');
     const savedShowAllTab = localStorage.getItem('showAllTab');
     
     if (savedApiKey) setNotionApiKey(savedApiKey);
-    if (savedDbId) setDatabaseId(savedDbId);
-    
-    if (savedProfiles) {
-      try {
-        setProfiles(JSON.parse(savedProfiles));
-      } catch (e) {
-        console.error('Erreur parsing profiles:', e);
+    if (savedDbId) {
+      setDatabaseId(savedDbId);
+      
+      // ISOLATION: Charger les profils et comptes spécifiques à cette base
+      const savedProfiles = localStorage.getItem(`profiles-${savedDbId}`);
+      const savedAccounts = localStorage.getItem(`accounts-${savedDbId}`);
+      
+      if (savedProfiles) {
+        try {
+          setProfiles(JSON.parse(savedProfiles));
+          console.log(`✅ Profils chargés pour base: ${savedDbId}`);
+        } catch (e) {
+          console.error('Erreur parsing profiles:', e);
+        }
+      }
+      
+      if (savedAccounts) {
+        try {
+          const accounts = JSON.parse(savedAccounts);
+          setAccounts(accounts);
+          if (accounts.length > 0) {
+            setActiveAccount(accounts[0]);
+          }
+          console.log(`✅ Comptes chargés pour base: ${savedDbId}`, accounts);
+        } catch (e) {
+          console.error('Erreur parsing accounts:', e);
+          setAccounts([]);
+        }
       }
     }
     
     if (savedShowAllTab !== null) {
       setShowAllTab(savedShowAllTab === 'true');
-    }
-    
-    if (savedAccounts) {
-      try {
-        const accounts = JSON.parse(savedAccounts);
-        setAccounts(accounts);
-        if (accounts.length > 0) {
-          setActiveAccount(accounts[0]);
-        }
-      } catch (e) {
-        console.error('Erreur parsing accounts:', e);
-        setAccounts([]);
-      }
     }
 
     if (savedApiKey && savedDbId) {
@@ -360,7 +367,6 @@ const InstagramNotionWidget = () => {
     }
   };
 
-  // Calculer une nouvelle date entre deux posts
   const calculateNewDate = (prevPost, nextPost) => {
     const now = new Date();
     
@@ -387,7 +393,6 @@ const InstagramNotionWidget = () => {
     return new Date(middleTime).toISOString().split('T')[0];
   };
 
-  // Synchroniser la nouvelle date avec Notion
   const syncDateToNotion = async (postId, newDate) => {
     if (isSyncing) return;
     
@@ -457,10 +462,19 @@ const InstagramNotionWidget = () => {
     };
   };
 
+  // MODIFICATION 2: Sauvegarder avec clé unique par databaseId
   const saveProfile = (account, profileData) => {
+    if (!databaseId) {
+      console.warn('⚠️ Pas de databaseId, profil non sauvegardé');
+      return;
+    }
+    
     const newProfiles = { ...profiles, [account]: profileData };
     setProfiles(newProfiles);
-    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    
+    // ISOLATION: Sauvegarder avec clé unique
+    localStorage.setItem(`profiles-${databaseId}`, JSON.stringify(newProfiles));
+    console.log(`✅ Profils sauvegardés pour base: ${databaseId}`);
   };
 
   const hideAllTab = () => {
@@ -471,8 +485,14 @@ const InstagramNotionWidget = () => {
     }
   };
 
+  // MODIFICATION 3: addAccount avec sauvegarde isolée
   const addAccount = () => {
     if (!newAccountName.trim() || accounts.includes(newAccountName.trim())) {
+      return;
+    }
+
+    if (!databaseId) {
+      showNotification('Connectez d\'abord une base Notion', 'error');
       return;
     }
 
@@ -492,15 +512,20 @@ const InstagramNotionWidget = () => {
     const newProfiles = { ...profiles, [newAccount]: newProfile };
     setProfiles(newProfiles);
     
-    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
-    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    // ISOLATION: Sauvegarder avec clé unique par base
+    localStorage.setItem(`accounts-${databaseId}`, JSON.stringify(newAccounts));
+    localStorage.setItem(`profiles-${databaseId}`, JSON.stringify(newProfiles));
+    console.log(`✅ Compte "${newAccount}" ajouté pour base: ${databaseId}`);
     
     setActiveAccount(newAccount);
     setNewAccountName('');
     setIsAccountManager(false);
   };
 
+  // MODIFICATION 4: removeAccount avec sauvegarde isolée
   const removeAccount = (accountToRemove) => {
+    if (!databaseId) return;
+    
     const newAccounts = accounts.filter(acc => acc !== accountToRemove);
     setAccounts(newAccounts);
     
@@ -518,28 +543,38 @@ const InstagramNotionWidget = () => {
     delete newProfiles[accountToRemove];
     setProfiles(newProfiles);
     
-    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
-    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    // ISOLATION: Sauvegarder avec clé unique
+    localStorage.setItem(`accounts-${databaseId}`, JSON.stringify(newAccounts));
+    localStorage.setItem(`profiles-${databaseId}`, JSON.stringify(newProfiles));
+    console.log(`✅ Compte "${accountToRemove}" supprimé pour base: ${databaseId}`);
   };
 
+  // MODIFICATION 5: removeAllAccounts avec sauvegarde isolée
   const removeAllAccounts = () => {
+    if (!databaseId) return;
+    
     setAccounts([]);
     setActiveAccount('All');
     
     const newProfiles = { 'All': profiles['All'] || getProfile('All') };
     setProfiles(newProfiles);
     
-    localStorage.setItem('instagramAccounts', JSON.stringify([]));
-    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    // ISOLATION: Sauvegarder avec clé unique
+    localStorage.setItem(`accounts-${databaseId}`, JSON.stringify([]));
+    localStorage.setItem(`profiles-${databaseId}`, JSON.stringify(newProfiles));
+    console.log(`✅ Tous les comptes supprimés pour base: ${databaseId}`);
     setIsAccountManager(false);
   };
 
+  // MODIFICATION 6: renameAccount avec sauvegarde isolée
   const renameAccount = (oldName, newName) => {
     if (!newName.trim() || newName === oldName || accounts.includes(newName.trim())) {
       setEditingAccount(null);
       setEditAccountName('');
       return;
     }
+
+    if (!databaseId) return;
 
     const trimmedNewName = newName.trim();
     
@@ -557,14 +592,15 @@ const InstagramNotionWidget = () => {
       setProfiles(newProfiles);
     }
     
-    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
-    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    // ISOLATION: Sauvegarder avec clé unique
+    localStorage.setItem(`accounts-${databaseId}`, JSON.stringify(newAccounts));
+    localStorage.setItem(`profiles-${databaseId}`, JSON.stringify(newProfiles));
+    console.log(`✅ Compte renommé "${oldName}" → "${trimmedNewName}" pour base: ${databaseId}`);
     
     setEditingAccount(null);
     setEditAccountName('');
   };
 
-  // Filtrer et trier les posts par date (chronologique inversé = plus récent en premier)
   const getOrderedFilteredPosts = () => {
     const accountFiltered = posts.filter(post => {
       if (activeAccount === 'All' || accounts.length === 0) {
@@ -631,7 +667,6 @@ const InstagramNotionWidget = () => {
 
     console.log(`🔄 DRAG & DROP: "${sourcePost.title}" de position ${draggedIndex} → ${dropIndex}`);
 
-    // Calculer la nouvelle date basée sur les posts adjacents
     const prevPost = dropIndex > 0 ? filteredPosts[dropIndex - 1] : null;
     const nextPost = dropIndex < filteredPosts.length ? filteredPosts[dropIndex] : null;
     
@@ -640,7 +675,6 @@ const InstagramNotionWidget = () => {
     console.log(`📅 Nouvelle date calculée: ${newDate}`);
     console.log(`📅 Entre: ${prevPost?.date || 'début'} et ${nextPost?.date || 'fin'}`);
 
-    // Synchroniser avec Notion
     await syncDateToNotion(sourcePost.id, newDate);
 
     setDraggedIndex(null);
@@ -950,6 +984,9 @@ const InstagramNotionWidget = () => {
                 </p>
                 <p className="text-blue-600 mt-1 text-xs">
                   Déplace un post dans le widget = sa date change automatiquement dans Notion
+                </p>
+                <p className="text-green-700 mt-2 font-medium text-xs">
+                  🔒 Widgets isolés : Chaque base Notion a ses propres comptes et profils !
                 </p>
               </div>
 
