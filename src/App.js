@@ -3,6 +3,17 @@ import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play,
 
 const API_BASE = 'https://freelance-creatif.vercel.app/api';
 
+// NAMESPACE GLOBAL UNIQUE PAR SESSION
+const SESSION_NAMESPACE = (() => {
+  const key = 'instagram_widget_session_ns';
+  let namespace = sessionStorage.getItem(key);
+  if (!namespace) {
+    namespace = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem(key, namespace);
+  }
+  return namespace;
+})();
+
 // GÉNÉRATION D'UN ID UNIQUE PAR WIDGET
 const generateWidgetId = () => {
   // Utilisation de crypto.randomUUID si disponible, sinon fallback avec plus d'entropie
@@ -248,12 +259,22 @@ const PostModal = ({ post, isOpen, onClose, onNavigate }) => {
 };
 
 const InstagramNotionWidget = ({ widgetKey = null }) => {
-  // ID UNIQUE DU WIDGET - Généré une seule fois par instance (sans sessionStorage partagé)
-  const [widgetId] = useState(() => {
-    const newId = generateWidgetId();
-    console.log(`🆔 Nouveau widget créé avec ID: ${newId}`);
-    return newId;
-  });
+  // ID UNIQUE DU WIDGET - Utilisation de useRef pour éviter les re-renders et le partage d'état
+  const widgetIdRef = useRef(null);
+  
+  // Générer l'ID de manière synchrone et l'assigner immédiatement
+  if (!widgetIdRef.current) {
+    // Créer un ID vraiment unique avec plus d'entropie
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 15);
+    const extra = Math.random().toString(36).substring(2, 10);
+    const performance_now = typeof performance !== 'undefined' ? performance.now().toString(36).replace('.', '') : '';
+    
+    widgetIdRef.current = `widget_${timestamp}_${random}_${extra}_${performance_now}_${Date.now()}`;
+    console.log(`🆔 Widget créé avec ID unique: ${widgetIdRef.current}`);
+  }
+  
+  const widgetId = widgetIdRef.current;
 
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isProfileEdit, setIsProfileEdit] = useState(false);
@@ -298,15 +319,17 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
     }, 3000);
   };
 
-  // Charger la configuration du workspace
+  // Charger la configuration du workspace avec namespace isolé
   const loadWorkspaceConfig = (workspaceId) => {
     try {
-      const configKey = `workspace_${workspaceId}`;
+      const configKey = `${SESSION_NAMESPACE}_workspace_${workspaceId}`;
       const savedConfig = localStorage.getItem(configKey);
+      
+      console.log(`🔍 Tentative de chargement: ${configKey}`);
       
       if (savedConfig) {
         const config = JSON.parse(savedConfig);
-        console.log(`🔑 Chargement workspace: ${workspaceId}`, config);
+        console.log(`🔑 Configuration trouvée pour: ${workspaceId}`, config);
         
         // Vérifier la cohérence de l'ID
         if (config.widgetId && config.widgetId !== workspaceId) {
@@ -326,12 +349,91 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
         
         return true;
       }
+      
+      console.log(`📝 Aucune configuration trouvée pour: ${workspaceId}`);
       return false;
     } catch (e) {
       console.error('❌ Erreur chargement workspace:', e);
       return false;
     }
   };
+
+  // Sauvegarder la configuration du workspace avec namespace isolé
+  const saveWorkspaceConfig = () => {
+    if (!widgetId) {
+      console.warn('⚠️ Tentative de sauvegarde sans widgetId');
+      return;
+    }
+    
+    const configKey = `${SESSION_NAMESPACE}_workspace_${widgetId}`;
+    const config = {
+      widgetId: widgetId, // Ajouter l'ID dans la config pour vérification
+      namespace: SESSION_NAMESPACE, // Ajouter le namespace pour debug
+      name: workspaceName || databaseId?.substring(0, 8) || 'Widget',
+      apiKey: notionApiKey,
+      databaseId: databaseId,
+      profiles: profiles,
+      accounts: accounts,
+      showAllTab: showAllTab,
+      lastUpdate: new Date().toISOString()
+    };
+    
+    console.log(`💾 Sauvegarde avec clé: ${configKey}`, config);
+    
+    // Vérifier les conflits
+    const existingConfig = localStorage.getItem(configKey);
+    if (existingConfig) {
+      try {
+        const parsed = JSON.parse(existingConfig);
+        if (parsed.widgetId && parsed.widgetId !== widgetId) {
+          console.error(`❌ CONFLIT D'ID! Config existante: ${parsed.widgetId}, Nouveau: ${widgetId}`);
+          console.error(`❌ Clé utilisée: ${configKey}`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Config existante corrompue, écrasement');
+      }
+    }
+    
+    localStorage.setItem(configKey, JSON.stringify(config));
+    
+    // Mettre à jour la liste des workspaces avec namespace
+    try {
+      const workspacesListKey = `${SESSION_NAMESPACE}_workspaces_list`;
+      const workspacesList = JSON.parse(localStorage.getItem(workspacesListKey) || '[]');
+      const existingIndex = workspacesList.findIndex(w => w.id === widgetId);
+      
+      const workspaceEntry = {
+        id: widgetId,
+        name: config.name,
+        databaseId: databaseId,
+        namespace: SESSION_NAMESPACE,
+        created: existingIndex === -1 ? new Date().toISOString() : workspacesList[existingIndex].created
+      };
+      
+      if (existingIndex === -1) {
+        workspacesList.push(workspaceEntry);
+        console.log(`➕ Nouveau workspace ajouté: ${widgetId} dans ${SESSION_NAMESPACE}`);
+      } else {
+        workspacesList[existingIndex] = workspaceEntry;
+        console.log(`🔄 Workspace mis à jour: ${widgetId} dans ${SESSION_NAMESPACE}`);
+      }
+      
+      localStorage.setItem(workspacesListKey, JSON.stringify(workspacesList));
+    } catch (e) {
+      console.error('❌ Erreur lors de la mise à jour de la liste des workspaces:', e);
+    }
+  };
+
+  // Charger au démarrage
+  useEffect(() => {
+    console.log(`🆔 Widget ID unique: ${widgetId} dans namespace: ${SESSION_NAMESPACE}`);
+    const loaded = loadWorkspaceConfig(widgetId);
+    
+    if (!loaded) {
+      console.log('📝 Nouveau widget, configuration vide');
+      setIsConfigOpen(true);
+    }
+  }, [widgetId]);
 
   // Sauvegarder automatiquement à chaque changement (avec délai pour éviter les race conditions)
   useEffect(() => {
@@ -344,78 +446,6 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
       return () => clearTimeout(timeoutId);
     }
   }, [notionApiKey, databaseId, profiles, accounts, showAllTab, workspaceName, widgetId]);
-
-  // Sauvegarder la configuration du workspace
-  const saveWorkspaceConfig = () => {
-    if (!widgetId) {
-      console.warn('⚠️ Tentative de sauvegarde sans widgetId');
-      return;
-    }
-    
-    const configKey = `workspace_${widgetId}`;
-    const config = {
-      widgetId: widgetId, // Ajouter l'ID dans la config pour vérification
-      name: workspaceName || databaseId?.substring(0, 8) || 'Widget',
-      apiKey: notionApiKey,
-      databaseId: databaseId,
-      profiles: profiles,
-      accounts: accounts,
-      showAllTab: showAllTab,
-      lastUpdate: new Date().toISOString()
-    };
-    
-    // Vérifier que la configuration n'existe pas déjà avec un autre ID
-    const existingConfig = localStorage.getItem(configKey);
-    if (existingConfig) {
-      try {
-        const parsed = JSON.parse(existingConfig);
-        if (parsed.widgetId && parsed.widgetId !== widgetId) {
-          console.error(`❌ Conflit d'ID détecté! Config existante: ${parsed.widgetId}, Nouveau: ${widgetId}`);
-        }
-      } catch (e) {
-        console.warn('⚠️ Config existante corrompue, écrasement');
-      }
-    }
-    
-    localStorage.setItem(configKey, JSON.stringify(config));
-    console.log(`💾 Sauvegarde workspace: ${widgetId}`, config);
-    
-    // Ajouter à la liste des workspaces avec vérification d'unicité
-    try {
-      const workspacesList = JSON.parse(localStorage.getItem('workspaces_list') || '[]');
-      const existingIndex = workspacesList.findIndex(w => w.id === widgetId);
-      
-      const workspaceEntry = {
-        id: widgetId,
-        name: config.name,
-        databaseId: databaseId,
-        created: existingIndex === -1 ? new Date().toISOString() : workspacesList[existingIndex].created
-      };
-      
-      if (existingIndex === -1) {
-        workspacesList.push(workspaceEntry);
-        console.log(`➕ Nouveau workspace ajouté à la liste: ${widgetId}`);
-      } else {
-        workspacesList[existingIndex] = workspaceEntry;
-        console.log(`🔄 Workspace mis à jour dans la liste: ${widgetId}`);
-      }
-      
-      localStorage.setItem('workspaces_list', JSON.stringify(workspacesList));
-    } catch (e) {
-      console.error('❌ Erreur lors de la mise à jour de la liste des workspaces:', e);
-    }
-  };
-
-  // Charger au démarrage
-  useEffect(() => {
-    console.log(`🆔 Widget ID unique: ${widgetId}`);
-    const loaded = loadWorkspaceConfig(widgetId);
-    
-    if (!loaded) {
-      console.log('📝 Nouveau widget, configuration vide');
-      setIsConfigOpen(true);
-    }
-  }, [widgetId]);
 
   const fetchPosts = async (apiKey = notionApiKey, dbId = databaseId) => {
     setIsRefreshing(true);
@@ -741,7 +771,8 @@ const InstagramNotionWidget = ({ widgetKey = null }) => {
   // Liste des workspaces disponibles
   const getWorkspacesList = () => {
     try {
-      return JSON.parse(localStorage.getItem('workspaces_list') || '[]');
+      const workspacesListKey = `${SESSION_NAMESPACE}_workspaces_list`;
+      return JSON.parse(localStorage.getItem(workspacesListKey) || '[]');
     } catch {
       return [];
     }
