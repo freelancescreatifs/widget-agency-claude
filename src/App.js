@@ -1,40 +1,9 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { Camera, Settings, RefreshCw, Edit3, X, ChevronLeft, ChevronRight, Play, Plus, ChevronDown } from 'lucide-react';
 
 const API_BASE = 'https://freelance-creatif.vercel.app/api';
-
-// 📋 Messages d'erreur détaillés en français
-const ERROR_MESSAGES = {
-  STORAGE_READ: "⚠️ Impossible de lire les données sauvegardées. Vérifiez que votre navigateur autorise le stockage local.",
-  STORAGE_WRITE: "⚠️ Impossible de sauvegarder les données. Vérifiez l'espace de stockage disponible dans votre navigateur.",
-  API_KEY_MISSING: "🔑 Veuillez d'abord saisir votre clé API Notion.\n\nRendez-vous sur notion.so/my-integrations pour créer une intégration et obtenir votre clé API.",
-  DATABASE_ID_MISSING: "🗂️ Veuillez saisir l'ID de votre base de données Notion.\n\nVous pouvez le trouver dans l'URL de votre base de données.",
-  EMPTY_FIELDS: "📝 Veuillez remplir tous les champs requis :\n• Clé API Notion\n• ID de la base de données",
-  INVALID_API_KEY: "🔑 Format de clé API invalide.\n\nVotre clé doit commencer par 'secret_' ou 'ntn_' suivi de caractères alphanumériques.\n\nExemple: secret_abc123...",
-  INVALID_DATABASE_ID: "🗂️ ID de base de données invalide.\n\nL'ID doit contenir exactement 32 caractères hexadécimaux (0-9, a-f).\n\nExemple: 1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
-  NOTION_CONNECTION: "🔌 Impossible de se connecter à Notion.\n\nVérifications :\n✓ Votre connexion internet\n✓ Votre clé API est valide\n✓ L'intégration a accès à la base de données",
-  NOTION_SYNC_ERROR: "❌ Erreur lors de la synchronisation avec Notion.\n\nVérifiez :\n• La clé API est correcte\n• L'ID de base de données est valide\n• L'intégration a les permissions nécessaires",
-  NOTION_UPDATE_ERROR: "❌ Échec de la mise à jour dans Notion.\n\nAssurez-vous que :\n• L'intégration a les permissions d'écriture\n• La propriété 'Date' existe dans votre base\n• Le format de date est valide",
-  NETWORK_ERROR: "🌐 Erreur réseau détectée.\n\nActions recommandées :\n• Vérifiez votre connexion internet\n• Réessayez dans quelques secondes\n• Rechargez la page si le problème persiste",
-  ACCOUNT_NAME_REQUIRED: "👤 Veuillez entrer un nom pour le nouveau compte.",
-  ACCOUNT_EXISTS: "⚠️ Un compte avec ce nom existe déjà.\n\nVeuillez choisir un nom différent.",
-  NO_POSTS_FOUND: "📭 Aucun post trouvé dans cette base de données.\n\nAssurez-vous que :\n• Votre base Notion contient des entrées\n• Les propriétés requises sont présentes\n• L'intégration a accès à la base",
-  PROPERTY_MISSING: "⚠️ Propriété Notion manquante.\n\nVérifiez que votre base Notion contient les colonnes suivantes :\n• Titre (Title)\n• Date (Date)\n• Caption (Text)\n• URLs (Files & media)",
-  UNKNOWN_ERROR: "❌ Une erreur inattendue s'est produite.\n\nVeuillez réessayer. Si le problème persiste, vérifiez la console pour plus de détails."
-};
-
-// 📊 Messages de succès
-const SUCCESS_MESSAGES = {
-  POSTS_LOADED: (count) => `✅ ${count} post${count > 1 ? 's' : ''} chargé${count > 1 ? 's' : ''} avec succès`,
-  NEW_POSTS: (count) => `🎉 ${count} nouveau${count > 1 ? 'x' : ''} post${count > 1 ? 's' : ''} ajouté${count > 1 ? 's' : ''}`,
-  FEED_UP_TO_DATE: "✓ Votre feed est à jour",
-  DATE_UPDATED: (date) => `📅 Date mise à jour : ${new Date(date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`,
-  PROFILE_SAVED: "✓ Profil sauvegardé avec succès",
-  ACCOUNT_ADDED: (name) => `✓ Compte "${name}" ajouté`,
-  ACCOUNT_REMOVED: (name) => `✓ Compte "${name}" supprimé`,
-  CONFIG_SAVED: "✓ Configuration sauvegardée",
-  MAPPINGS_SAVED: "✅ Configuration des propriétés sauvegardée avec succès"
-};
 
 const detectMediaType = (urls) => {
   if (!urls || urls.length === 0) return 'Image';
@@ -277,16 +246,6 @@ const InstagramNotionWidget = () => {
   const [notification, setNotification] = useState(null);
   const [showRefreshMenu, setShowRefreshMenu] = useState(false);
 
-  // 🔧 État pour la configuration des propriétés Notion
-  const [propertyMappings, setPropertyMappings] = useState({
-    title: 'Titre',
-    date: 'Date',
-    caption: 'Caption',
-    urls: 'Couverture',
-    account: 'Compte Instagram'
-  });
-  const [isPropertyConfig, setIsPropertyConfig] = useState(false);
-
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
@@ -313,78 +272,46 @@ const InstagramNotionWidget = () => {
     setNotification({ message, type });
     setTimeout(() => {
       setNotification(null);
-    }, type === 'error' ? 5000 : 3000); // Plus de temps pour lire les erreurs
-  };
-
-  // 🔐 Validation de la clé API
-  const validateApiKey = (key) => {
-    if (!key || !key.trim()) return false;
-    const trimmedKey = key.trim();
-    // Accepter les clés qui commencent par 'secret_' ou 'ntn_'
-    return trimmedKey.startsWith('secret_') || trimmedKey.startsWith('ntn_');
-  };
-
-  // 🗂️ Validation de l'ID de base de données
-  const validateDatabaseId = (id) => {
-    if (!id || !id.trim()) return false;
-    // Enlever les tirets et vérifier 32 caractères hexadécimaux
-    const cleanId = id.trim().replace(/-/g, '');
-    return /^[a-f0-9]{32}$/i.test(cleanId);
+    }, 3000);
   };
 
   useEffect(() => {
-    try {
-      const savedApiKey = localStorage.getItem('notionApiKey');
-      const savedDbId = localStorage.getItem('databaseId');
-      const savedProfiles = localStorage.getItem('instagramProfiles');
-      const savedAccounts = localStorage.getItem('instagramAccounts');
-      const savedShowAllTab = localStorage.getItem('showAllTab');
-      const savedMappings = localStorage.getItem('propertyMappings');
-      
-      if (savedApiKey) setNotionApiKey(savedApiKey);
-      if (savedDbId) setDatabaseId(savedDbId);
-      
-      if (savedMappings) {
-        try {
-          setPropertyMappings(JSON.parse(savedMappings));
-        } catch (e) {
-          console.error('Erreur parsing mappings:', e);
+    const savedApiKey = localStorage.getItem('notionApiKey');
+    const savedDbId = localStorage.getItem('databaseId');
+    const savedProfiles = localStorage.getItem('instagramProfiles');
+    const savedAccounts = localStorage.getItem('instagramAccounts');
+    const savedShowAllTab = localStorage.getItem('showAllTab');
+    
+    if (savedApiKey) setNotionApiKey(savedApiKey);
+    if (savedDbId) setDatabaseId(savedDbId);
+    
+    if (savedProfiles) {
+      try {
+        setProfiles(JSON.parse(savedProfiles));
+      } catch (e) {
+        console.error('Erreur parsing profiles:', e);
+      }
+    }
+    
+    if (savedShowAllTab !== null) {
+      setShowAllTab(savedShowAllTab === 'true');
+    }
+    
+    if (savedAccounts) {
+      try {
+        const accounts = JSON.parse(savedAccounts);
+        setAccounts(accounts);
+        if (accounts.length > 0) {
+          setActiveAccount(accounts[0]);
         }
+      } catch (e) {
+        console.error('Erreur parsing accounts:', e);
+        setAccounts([]);
       }
-      
-      if (savedProfiles) {
-        try {
-          setProfiles(JSON.parse(savedProfiles));
-        } catch (e) {
-          console.error('Erreur parsing profiles:', e);
-          showNotification(ERROR_MESSAGES.STORAGE_READ, 'error');
-        }
-      }
-      
-      if (savedShowAllTab !== null) {
-        setShowAllTab(savedShowAllTab === 'true');
-      }
-      
-      if (savedAccounts) {
-        try {
-          const accounts = JSON.parse(savedAccounts);
-          setAccounts(accounts);
-          if (accounts.length > 0) {
-            setActiveAccount(accounts[0]);
-          }
-        } catch (e) {
-          console.error('Erreur parsing accounts:', e);
-          setAccounts([]);
-          showNotification(ERROR_MESSAGES.STORAGE_READ, 'error');
-        }
-      }
+    }
 
-      if (savedApiKey && savedDbId) {
-        fetchPosts(savedApiKey, savedDbId);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement:', error);
-      showNotification(ERROR_MESSAGES.STORAGE_READ, 'error');
+    if (savedApiKey && savedDbId) {
+      fetchPosts(savedApiKey, savedDbId);
     }
   }, []);
 
@@ -401,13 +328,8 @@ const InstagramNotionWidget = () => {
         body: JSON.stringify({
           apiKey: apiKey,
           databaseId: dbId,
-          propertyMappings: propertyMappings
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
 
       const data = await response.json();
 
@@ -417,45 +339,22 @@ const InstagramNotionWidget = () => {
         
         setPosts(data.posts);
         
-        if (data.posts.length === 0) {
-          showNotification(ERROR_MESSAGES.NO_POSTS_FOUND, 'error');
-        } else if (posts.length === 0 && data.posts.length > 0) {
-          showNotification(SUCCESS_MESSAGES.POSTS_LOADED(data.posts.length), 'success');
+        if (posts.length === 0 && data.posts.length > 0) {
+          showNotification(`${data.posts.length} posts chargés`, 'success');
         } else if (newPosts.length > 0) {
-          showNotification(SUCCESS_MESSAGES.NEW_POSTS(newPosts.length), 'success');
+          showNotification(`${newPosts.length} nouveau(x) post(s) ajouté(s)`, 'success');
         } else {
-          showNotification(SUCCESS_MESSAGES.FEED_UP_TO_DATE, 'info');
+          showNotification('Feed à jour', 'info');
         }
         
         setIsConfigOpen(false);
       } else {
-        console.error('❌ Erreur Notion:', data.error);
-        
-        // Messages d'erreur plus spécifiques selon le type d'erreur
-        let errorMessage = ERROR_MESSAGES.NOTION_SYNC_ERROR;
-        
-        if (data.error.includes('API key') || data.error.includes('Unauthorized')) {
-          errorMessage = ERROR_MESSAGES.INVALID_API_KEY;
-        } else if (data.error.includes('database') || data.error.includes('not found')) {
-          errorMessage = ERROR_MESSAGES.INVALID_DATABASE_ID;
-        } else if (data.error.includes('property') || data.error.includes('column')) {
-          errorMessage = ERROR_MESSAGES.PROPERTY_MISSING;
-        } else if (data.error.includes('network') || data.error.includes('fetch')) {
-          errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
-        }
-        
-        showNotification(`${errorMessage}\n\n💡 Détail technique : ${data.error}`, 'error');
+        console.error('Erreur Notion:', data.error);
+        showNotification(`Erreur: ${data.error}`, 'error');
       }
     } catch (error) {
-      console.error('❌ Erreur fetch:', error);
-      
-      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        showNotification(ERROR_MESSAGES.NETWORK_ERROR, 'error');
-      } else if (error.message.includes('HTTP')) {
-        showNotification(`${ERROR_MESSAGES.NOTION_CONNECTION}\n\n💡 ${error.message}`, 'error');
-      } else {
-        showNotification(`${ERROR_MESSAGES.UNKNOWN_ERROR}\n\n💡 ${error.message}`, 'error');
-      }
+      console.error('Erreur fetch:', error);
+      showNotification('Erreur de connexion', 'error');
     } finally {
       setTimeout(() => {
         setIsRefreshing(false);
@@ -509,82 +408,41 @@ const InstagramNotionWidget = () => {
           action: 'updateDate',
           postId: postId,
           newDate: newDate,
-          propertyMappings: propertyMappings
         }),
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
       
       const result = await response.json();
       
       if (result.success) {
         console.log('✅ Date mise à jour dans Notion');
-        showNotification(SUCCESS_MESSAGES.DATE_UPDATED(newDate), 'success');
+        showNotification(`Date mise à jour: ${new Date(newDate).toLocaleDateString('fr-FR')}`, 'success');
         
         setTimeout(() => {
           fetchPosts();
         }, 1000);
       } else {
-        console.error('❌ Erreur:', result.error);
-        showNotification(`${ERROR_MESSAGES.NOTION_UPDATE_ERROR}\n\n💡 ${result.error}`, 'error');
+        console.error('Erreur:', result.error);
+        showNotification('Erreur lors de la mise à jour', 'error');
       }
       
     } catch (error) {
-      console.error('❌ Erreur synchronisation:', error);
-      if (error.message.includes('Failed to fetch')) {
-        showNotification(ERROR_MESSAGES.NETWORK_ERROR, 'error');
-      } else {
-        showNotification(`${ERROR_MESSAGES.NOTION_UPDATE_ERROR}\n\n💡 ${error.message}`, 'error');
-      }
+      console.error('Erreur synchronisation:', error);
+      showNotification('Erreur de connexion', 'error');
     } finally {
       setIsSyncing(false);
     }
   };
 
   const connectToNotion = async () => {
-    // Validation complète
-    if (!notionApiKey || !notionApiKey.trim()) {
-      showNotification(ERROR_MESSAGES.API_KEY_MISSING, 'error');
+    if (!notionApiKey || !databaseId) {
+      showNotification('Veuillez remplir tous les champs', 'error');
       return;
     }
 
-    if (!databaseId || !databaseId.trim()) {
-      showNotification(ERROR_MESSAGES.DATABASE_ID_MISSING, 'error');
-      return;
-    }
-
-    if (!validateApiKey(notionApiKey)) {
-      showNotification(ERROR_MESSAGES.INVALID_API_KEY, 'error');
-      return;
-    }
-
-    if (!validateDatabaseId(databaseId)) {
-      showNotification(ERROR_MESSAGES.INVALID_DATABASE_ID, 'error');
-      return;
-    }
-
-    try {
-      localStorage.setItem('notionApiKey', notionApiKey.trim());
-      localStorage.setItem('databaseId', databaseId.trim());
-      showNotification(SUCCESS_MESSAGES.CONFIG_SAVED, 'success');
-      
-      await fetchPosts();
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
-    }
-  };
-
-  // 💾 Sauvegarder la configuration des propriétés
-  const savePropertyMappings = () => {
-    try {
-      localStorage.setItem('propertyMappings', JSON.stringify(propertyMappings));
-      showNotification(SUCCESS_MESSAGES.MAPPINGS_SAVED, 'success');
-      setIsPropertyConfig(false);
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
-    }
+    localStorage.setItem('notionApiKey', notionApiKey);
+    localStorage.setItem('databaseId', databaseId);
+    
+    await fetchPosts();
   };
 
   const getProfile = (account) => {
@@ -602,160 +460,110 @@ const InstagramNotionWidget = () => {
   };
 
   const saveProfile = (account, profileData) => {
-    try {
-      const newProfiles = { ...profiles, [account]: profileData };
-      setProfiles(newProfiles);
-      localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
-      showNotification(SUCCESS_MESSAGES.PROFILE_SAVED, 'success');
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
-    }
+    const newProfiles = { ...profiles, [account]: profileData };
+    setProfiles(newProfiles);
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
   const hideAllTab = () => {
-    try {
-      setShowAllTab(false);
-      localStorage.setItem('showAllTab', 'false');
-      if (activeAccount === 'All' && accounts.length > 0) {
-        setActiveAccount(accounts[0]);
-      }
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
+    setShowAllTab(false);
+    localStorage.setItem('showAllTab', 'false');
+    if (activeAccount === 'All' && accounts.length > 0) {
+      setActiveAccount(accounts[0]);
     }
   };
 
   const addAccount = () => {
-    if (!newAccountName || !newAccountName.trim()) {
-      showNotification(ERROR_MESSAGES.ACCOUNT_NAME_REQUIRED, 'error');
+    if (!newAccountName.trim() || accounts.includes(newAccountName.trim())) {
       return;
     }
 
-    if (accounts.includes(newAccountName.trim())) {
-      showNotification(ERROR_MESSAGES.ACCOUNT_EXISTS, 'error');
-      return;
-    }
-
-    try {
-      const newAccount = newAccountName.trim();
-      const newAccounts = [...accounts, newAccount];
-      setAccounts(newAccounts);
-      
-      const newProfile = {
-        username: newAccount.toLowerCase().replace(/\s+/g, '_'),
-        fullName: newAccount,
-        bio: `🚀 ${newAccount}\n📸 Créateur de contenu\n📍 Paris, France`,
-        profilePhoto: '',
-        followers: '1,234',
-        following: '567'
-      };
-      
-      const newProfiles = { ...profiles, [newAccount]: newProfile };
-      setProfiles(newProfiles);
-      
-      localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
-      localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
-      
-      setActiveAccount(newAccount);
-      setNewAccountName('');
-      setIsAccountManager(false);
-      
-      showNotification(SUCCESS_MESSAGES.ACCOUNT_ADDED(newAccount), 'success');
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
-    }
+    const newAccount = newAccountName.trim();
+    const newAccounts = [...accounts, newAccount];
+    setAccounts(newAccounts);
+    
+    const newProfile = {
+      username: newAccount.toLowerCase().replace(/\s+/g, '_'),
+      fullName: newAccount,
+      bio: `🚀 ${newAccount}\n📸 Créateur de contenu\n📍 Paris, France`,
+      profilePhoto: '',
+      followers: '1,234',
+      following: '567'
+    };
+    
+    const newProfiles = { ...profiles, [newAccount]: newProfile };
+    setProfiles(newProfiles);
+    
+    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    
+    setActiveAccount(newAccount);
+    setNewAccountName('');
+    setIsAccountManager(false);
   };
 
   const removeAccount = (accountToRemove) => {
-    try {
-      const newAccounts = accounts.filter(acc => acc !== accountToRemove);
-      setAccounts(newAccounts);
-      
-      if (activeAccount === accountToRemove) {
-        if (newAccounts.length > 0) {
-          setActiveAccount(newAccounts[0]);
-        } else {
-          setActiveAccount('All');
-          setShowAllTab(true);
-          localStorage.setItem('showAllTab', 'true');
-        }
+    const newAccounts = accounts.filter(acc => acc !== accountToRemove);
+    setAccounts(newAccounts);
+    
+    if (activeAccount === accountToRemove) {
+      if (newAccounts.length > 0) {
+        setActiveAccount(newAccounts[0]);
+      } else {
+        setActiveAccount('All');
+        setShowAllTab(true);
+        localStorage.setItem('showAllTab', 'true');
       }
-      
-      const newProfiles = { ...profiles };
-      delete newProfiles[accountToRemove];
-      setProfiles(newProfiles);
-      
-      localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
-      localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
-      
-      showNotification(SUCCESS_MESSAGES.ACCOUNT_REMOVED(accountToRemove), 'success');
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
     }
+    
+    const newProfiles = { ...profiles };
+    delete newProfiles[accountToRemove];
+    setProfiles(newProfiles);
+    
+    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
   };
 
   const removeAllAccounts = () => {
-    if (!window.confirm('⚠️ Êtes-vous sûr de vouloir supprimer tous les comptes ?')) {
-      return;
-    }
-
-    try {
-      setAccounts([]);
-      setActiveAccount('All');
-      
-      const newProfiles = { 'All': profiles['All'] || getProfile('All') };
-      setProfiles(newProfiles);
-      
-      localStorage.setItem('instagramAccounts', JSON.stringify([]));
-      localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
-      setIsAccountManager(false);
-      
-      showNotification('✓ Tous les comptes ont été supprimés', 'success');
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
-    }
+    setAccounts([]);
+    setActiveAccount('All');
+    
+    const newProfiles = { 'All': profiles['All'] || getProfile('All') };
+    setProfiles(newProfiles);
+    
+    localStorage.setItem('instagramAccounts', JSON.stringify([]));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    setIsAccountManager(false);
   };
 
   const renameAccount = (oldName, newName) => {
-    if (!newName.trim() || newName === oldName) {
+    if (!newName.trim() || newName === oldName || accounts.includes(newName.trim())) {
       setEditingAccount(null);
       setEditAccountName('');
       return;
     }
 
-    if (accounts.includes(newName.trim())) {
-      showNotification(ERROR_MESSAGES.ACCOUNT_EXISTS, 'error');
-      setEditingAccount(null);
-      setEditAccountName('');
-      return;
+    const trimmedNewName = newName.trim();
+    
+    const newAccounts = accounts.map(acc => acc === oldName ? trimmedNewName : acc);
+    setAccounts(newAccounts);
+    
+    if (activeAccount === oldName) {
+      setActiveAccount(trimmedNewName);
     }
-
-    try {
-      const trimmedNewName = newName.trim();
-      
-      const newAccounts = accounts.map(acc => acc === oldName ? trimmedNewName : acc);
-      setAccounts(newAccounts);
-      
-      if (activeAccount === oldName) {
-        setActiveAccount(trimmedNewName);
-      }
-      
-      const newProfiles = { ...profiles };
-      if (profiles[oldName]) {
-        newProfiles[trimmedNewName] = { ...profiles[oldName] };
-        delete newProfiles[oldName];
-        setProfiles(newProfiles);
-      }
-      
-      localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
-      localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
-      
-      setEditingAccount(null);
-      setEditAccountName('');
-      
-      showNotification(`✓ Compte renommé en "${trimmedNewName}"`, 'success');
-    } catch (error) {
-      showNotification(ERROR_MESSAGES.STORAGE_WRITE, 'error');
+    
+    const newProfiles = { ...profiles };
+    if (profiles[oldName]) {
+      newProfiles[trimmedNewName] = { ...profiles[oldName] };
+      delete newProfiles[oldName];
+      setProfiles(newProfiles);
     }
+    
+    localStorage.setItem('instagramAccounts', JSON.stringify(newAccounts));
+    localStorage.setItem('instagramProfiles', JSON.stringify(newProfiles));
+    
+    setEditingAccount(null);
+    setEditAccountName('');
   };
 
   // Filtrer et trier les posts par date (chronologique inversé = plus récent en premier)
@@ -861,7 +669,7 @@ const InstagramNotionWidget = () => {
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
               <span className="text-xs text-blue-600">
-                {isSyncing ? 'Synchronisation...' : 'Chargement...'}
+                {isSyncing ? 'Sync...' : 'Chargement...'}
               </span>
             </div>
           )}
@@ -1095,10 +903,10 @@ const InstagramNotionWidget = () => {
       </div>
 
       {isConfigOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">⚙️ Configuration Notion</h3>
+              <h3 className="text-lg font-semibold">Configuration Notion</h3>
               <button onClick={() => setIsConfigOpen(false)}>
                 <X size={20} />
               </button>
@@ -1107,162 +915,51 @@ const InstagramNotionWidget = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  🔑 Clé API Notion
+                  Clé API Notion
                 </label>
                 <input
                   type="text"
                   value={notionApiKey}
                   onChange={(e) => setNotionApiKey(e.target.value)}
-                  placeholder="secret_... ou ntn_..."
+                  placeholder="ntn_..."
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Créez une intégration sur <a href="https://notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">notion.so/my-integrations</a>
-                </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  🗂️ ID de la base de données
+                  ID de la base de données
                 </label>
                 <input
                   type="text"
                   value={databaseId}
                   onChange={(e) => setDatabaseId(e.target.value)}
-                  placeholder="32 caractères hexadécimaux"
+                  placeholder="32 caractères"
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Trouvez-le dans l'URL de votre base de données Notion
-                </p>
               </div>
 
-              {/* 🔧 Configuration des propriétés Notion */}
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    🔧 Noms des propriétés Notion
-                  </label>
-                  <button
-                    onClick={() => setIsPropertyConfig(!isPropertyConfig)}
-                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1"
-                  >
-                    <Settings size={14} />
-                    <span>{isPropertyConfig ? 'Masquer' : 'Configurer'}</span>
-                  </button>
-                </div>
-
-                {!isPropertyConfig && (
-                  <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                    <p className="font-medium mb-1">📌 Configuration actuelle :</p>
-                    <div className="space-y-0.5">
-                      <p>• Titre → <strong>{propertyMappings.title}</strong></p>
-                      <p>• Date → <strong>{propertyMappings.date}</strong></p>
-                      <p>• Caption → <strong>{propertyMappings.caption}</strong></p>
-                      <p>• Médias → <strong>{propertyMappings.urls}</strong></p>
-                      <p>• Compte → <strong>{propertyMappings.account}</strong></p>
-                    </div>
-                  </div>
-                )}
-
-                {isPropertyConfig && (
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg space-y-3">
-                    <div className="text-sm text-yellow-800 mb-3">
-                      <p className="font-medium mb-1">💡 Personnalisez les noms</p>
-                      <p className="text-xs">
-                        Si vos colonnes Notion ont des noms différents (ex: "Date de publication" au lieu de "Date"), modifiez-les ici.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div>
-                        <label className="text-xs font-medium text-gray-700">Titre du post</label>
-                        <input
-                          type="text"
-                          value={propertyMappings.title}
-                          onChange={(e) => setPropertyMappings({...propertyMappings, title: e.target.value})}
-                          placeholder="Ex: Titre, Title, Nom..."
-                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-gray-700">Date de publication</label>
-                        <input
-                          type="text"
-                          value={propertyMappings.date}
-                          onChange={(e) => setPropertyMappings({...propertyMappings, date: e.target.value})}
-                          placeholder="Ex: Date, Date de publication..."
-                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-gray-700">Légende/Caption</label>
-                        <input
-                          type="text"
-                          value={propertyMappings.caption}
-                          onChange={(e) => setPropertyMappings({...propertyMappings, caption: e.target.value})}
-                          placeholder="Ex: Caption, Description..."
-                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-gray-700">Médias (Images/Vidéos)</label>
-                        <input
-                          type="text"
-                          value={propertyMappings.urls}
-                          onChange={(e) => setPropertyMappings({...propertyMappings, urls: e.target.value})}
-                          placeholder="Ex: Couverture, Médias..."
-                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-gray-700">Compte Instagram</label>
-                        <input
-                          type="text"
-                          value={propertyMappings.account}
-                          onChange={(e) => setPropertyMappings({...propertyMappings, account: e.target.value})}
-                          placeholder="Ex: Compte, Account..."
-                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={savePropertyMappings}
-                      className="w-full bg-yellow-600 text-white py-2 rounded-lg hover:bg-yellow-700 text-sm font-medium"
-                    >
-                      💾 Sauvegarder la configuration
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-blue-50 p-3 rounded-lg text-xs border border-blue-200">
-                <p className="font-medium mb-2 text-blue-900">📋 Propriétés Notion requises :</p>
-                <ul className="space-y-1 text-blue-800">
-                  <li>• <strong>{propertyMappings.urls}</strong> (Files & media) - Images/vidéos</li>
-                  <li>• <strong>{propertyMappings.date}</strong> (Date) - Date de publication</li>
-                  <li>• <strong>{propertyMappings.caption}</strong> (Text) - Description</li>
-                  <li>• <strong>{propertyMappings.account}</strong> (Select) - Multi-comptes</li>
+              <div className="bg-blue-50 p-3 rounded-lg text-xs">
+                <p className="font-medium mb-2">📋 Colonnes Notion requises :</p>
+                <ul className="space-y-1 text-gray-600">
+                  <li>• <strong>Couverture</strong> (Files & media) - Vos images/vidéos</li>
+                  <li>• <strong>Date</strong> (Date) - Date de publication</li>
+                  <li>• <strong>Caption</strong> (Text) - Description</li>
+                  <li>• <strong>Compte Instagram</strong> (Select) - Multi-comptes</li>
                 </ul>
                 <p className="text-blue-700 mt-2 font-medium">
                   ✨ L'ordre est géré automatiquement par les dates !
                 </p>
-                <p className="text-blue-600 mt-1">
-                  Glissez-déposez un post = sa date change dans Notion
+                <p className="text-blue-600 mt-1 text-xs">
+                  Déplace un post dans le widget = sa date change automatiquement dans Notion
                 </p>
               </div>
 
               <button
                 onClick={connectToNotion}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                disabled={isRefreshing}
+                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                {isRefreshing ? 'Connexion...' : '🔌 Connecter à Notion'}
+                Connecter à Notion
               </button>
             </div>
           </div>
@@ -1273,7 +970,7 @@ const InstagramNotionWidget = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">👤 Gérer les comptes</h3>
+              <h3 className="text-lg font-semibold">Gérer les comptes</h3>
               <button onClick={() => setIsAccountManager(false)}>
                 <X size={20} />
               </button>
@@ -1289,7 +986,7 @@ const InstagramNotionWidget = () => {
                     type="text"
                     value={newAccountName}
                     onChange={(e) => setNewAccountName(e.target.value)}
-                    placeholder="Ex: Mon Compte Pro"
+                    placeholder="Ex: Freelance Créatif"
                     className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                     onKeyPress={(e) => e.key === 'Enter' && addAccount()}
                   />
@@ -1417,7 +1114,7 @@ const InstagramNotionWidget = () => {
                         onClick={removeAllAccounts}
                         className="w-full text-sm text-red-600 hover:text-red-800 hover:bg-red-50 py-2 px-3 rounded-lg transition-colors"
                       >
-                        🗑️ Supprimer tous les comptes
+                        Supprimer tous les comptes
                       </button>
                     </div>
                   )}
@@ -1432,7 +1129,7 @@ const InstagramNotionWidget = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">✏️ Modifier le profil - {activeAccount}</h3>
+              <h3 className="text-lg font-semibold">Modifier le profil - {activeAccount}</h3>
               <button onClick={() => setIsProfileEdit(false)}>
                 <X size={20} />
               </button>
@@ -1471,7 +1168,7 @@ const InstagramNotionWidget = () => {
 
       <div className="border-t bg-gray-50 py-3">
         <div className="text-center">
-          
+          <a
             href="https://www.instagram.com/freelance.creatif/"
             target="_blank"
             rel="noopener noreferrer"
@@ -1484,25 +1181,19 @@ const InstagramNotionWidget = () => {
 
       {notification && (
         <div 
-          className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-xl transition-all duration-300 max-w-md ${
+          className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg transition-all duration-300 ${
             notification.type === 'success' ? 'bg-green-500' :
             notification.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-          } text-white`}
+          } text-white font-medium`}
           style={{
             animation: 'slideIn 0.3s ease-out'
           }}
         >
-          <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0 mt-0.5">
-              {notification.type === 'success' && <span className="text-xl">✓</span>}
-              {notification.type === 'error' && <span className="text-xl">✕</span>}
-              {notification.type === 'info' && <span className="text-xl">ℹ</span>}
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium whitespace-pre-line leading-relaxed">
-                {notification.message}
-              </p>
-            </div>
+          <div className="flex items-center space-x-2">
+            {notification.type === 'success' && <span>✓</span>}
+            {notification.type === 'error' && <span>✕</span>}
+            {notification.type === 'info' && <span>ℹ</span>}
+            <span>{notification.message}</span>
           </div>
         </div>
       )}
@@ -1595,7 +1286,7 @@ const ProfileEditForm = ({ profile, onSave, onCancel }) => {
           onClick={() => onSave(formData)}
           className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
-          💾 Sauvegarder
+          Sauvegarder
         </button>
         <button
           onClick={onCancel}
